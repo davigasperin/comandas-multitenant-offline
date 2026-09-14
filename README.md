@@ -20,7 +20,12 @@ Em horários de pico, a conexão de rede cai com frequência. A arquitetura trat
 - **Fila Segura de Mutações:** Operações de adição de itens e fechamento com falha são salvas em fila local. 
 - **Chave de Idempotência (`X-Idempotency-Key`):** Todas as mutações geram uma chave única persistida. Ao restabelecer a conexão e disparar a sincronização, o backend rejeita duplicações acidentais caso a requisição anterior tenha sido processada mas o ACK tenha se perdido por timeout do socket.
 
-### 3. Gerenciamento de Estado & Injeção de Dependências
+### 3. Impressão Térmica de Recibos (80mm)
+O sistema implementa a geração e envio de cupons de controle de consumo em formato de rolo térmico (`roll80` - 80mm):
+- **Arquitetura de Hardware Delegada:** Em vez de forçar pareamentos BLE/ESC-POS com risco de desconexão, o app utiliza o serviço de spooler nativo do SO (`printing` / `pdf`), permitindo compatibilidade imediata com impressoras de rede, Bluetooth e USB sem dependências de hardware específicas.
+- **Relação com Tenant:** O documento resgata dinamicamente o nome fantasia da empresa ativa para compor o cabeçalho do cupom.
+
+### 4. Gerenciamento de Estado & Injeção de Dependências
 - **Flutter Riverpod:** Utilizado com abordagem limpa baseada em `Provider` (para singletons de infraestrutura como `Dio` e repositórios) e `FutureProvider.autoDispose` / `FutureProvider.family` para lidar com ciclos de vida de telas, evitando acúmulo de memória e boilerplates desnecessários.
 - **Design System Operacional:** Paleta em alto contraste (Teal & Amber), fontes tabulares (`Fira Code`) para valores monetários e áreas de toque mínimas de 48dp aderentes às diretrizes de ergonomia para telas sob luz forte.
 
