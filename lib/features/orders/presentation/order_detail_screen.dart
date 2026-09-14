@@ -103,8 +103,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     final currency = NumberFormat.simpleCurrency(locale: 'pt_BR');
 
     await showModalBottomSheet<void>(
-      context: context,
+      context: hostContext,
       isScrollControlled: true,
+      showDragHandle: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -194,10 +195,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                 final notes = notesController.text.trim().isEmpty
                                     ? null
                                     : notesController.text.trim();
-                                Navigator.of(modalContext).pop();
-                                if (!mounted) return;
+                                setModalState(() => _isAddingItem = true);
                                 final scaffoldMessenger = ScaffoldMessenger.of(context);
-                                setState(() => _isAddingItem = true);
                                 try {
                                   await ref.read(ordersRepositoryProvider).addItem(
                                         orderId: widget.orderId,
@@ -206,21 +205,37 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                         notes: notes,
                                       );
                                   _invalidateAll();
+                                  if (modalContext.mounted) {
+                                    Navigator.of(modalContext).pop();
+                                  }
                                 } catch (err) {
+                                  if (!mounted) return;
                                   scaffoldMessenger.showSnackBar(
                                     SnackBar(
                                       content: Text('Erro ao adicionar item: $err'),
                                     ),
                                   );
                                 } finally {
+                                  if (modalContext.mounted) {
+                                    setModalState(() => _isAddingItem = false);
+                                  }
                                   if (mounted) {
                                     setState(() => _isAddingItem = false);
                                   }
                                 }
                               },
-                        child: Text(
-                          'Adicionar (${currency.format(selectedProduct.price * quantity)})',
-                        ),
+                        child: _isAddingItem
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(
+                                'Adicionar (${currency.format(selectedProduct.price * quantity)})',
+                              ),
                       ),
                     ),
                   ],
@@ -283,7 +298,22 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
               ),
               Expanded(
                 child: order.items.isEmpty
-                    ? const Center(child: Text('Nenhum item lançado.'))
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.playlist_add, size: 48, color: Colors.grey),
+                            const SizedBox(height: 16),
+                            const Text('Nenhum item lançado.'),
+                            const SizedBox(height: 16),
+                            if (!isClosed)
+                              OutlinedButton(
+                                onPressed: () => _showAddProductSheet(context),
+                                child: const Text('Adicionar Primeiro Item'),
+                              ),
+                          ],
+                        ),
+                      )
                     : ListView.separated(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         itemCount: order.items.length,
@@ -293,7 +323,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                           return ListTile(
                             contentPadding: EdgeInsets.zero,
                             title: Text('${item.quantity}x ${item.productName}'),
-                            subtitle: item.notes != null ? Text(item.notes!) : null,
+                            subtitle: Text(
+                              '${currency.format(item.unitPrice)} cada${item.notes != null ? "\n• ${item.notes}" : ""}',
+                            ),
                             trailing: Text(
                               currency.format(item.subtotal),
                               style: GoogleFonts.firaCode(
@@ -331,6 +363,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                     if (!isClosed) ...[
                       Expanded(
                         child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(48),
+                          ),
                           onPressed: _isAddingItem || _isClosing
                               ? null
                               : () => _showAddProductSheet(context),
