@@ -30,7 +30,7 @@ class ReceiptDocument {
               pw.Center(
                 child: pw.Text(
                   establishmentName.toUpperCase(),
-                  style: pw.TextStyle(
+                  style: const pw.TextStyle(
                     fontSize: 14,
                     fontWeight: pw.FontWeight.bold,
                   ),
@@ -41,7 +41,7 @@ class ReceiptDocument {
               pw.Center(
                 child: pw.Text(
                   'CONTROLE DE CONSUMO',
-                  style: pw.TextStyle(fontSize: 10),
+                  style: const pw.TextStyle(fontSize: 10),
                 ),
               ),
               pw.Divider(thickness: 1),
@@ -50,22 +50,22 @@ class ReceiptDocument {
                 children: [
                   pw.Text(
                     order.tableLabel,
-                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12),
+                    style: const pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12),
                   ),
                   pw.Text(
                     order.status.label.toUpperCase(),
-                    style: pw.TextStyle(fontSize: 10),
+                    style: const pw.TextStyle(fontSize: 10),
                   ),
                 ],
               ),
               pw.Text(
                 'Abertura: ${dateFmt.format(order.openedAt)}',
-                style: pw.TextStyle(fontSize: 9),
+                style: const pw.TextStyle(fontSize: 9),
               ),
               pw.Divider(thickness: 1),
               pw.Text(
                 'ITENS DO PEDIDO',
-                style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+                style: const pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
               ),
               pw.SizedBox(height: 4),
               if (order.items.isEmpty)
@@ -73,7 +73,7 @@ class ReceiptDocument {
                   padding: const pw.EdgeInsets.symmetric(vertical: 8),
                   child: pw.Text(
                     'Nenhum item lançado.',
-                    style: pw.TextStyle(fontSize: 9),
+                    style: const pw.TextStyle(fontSize: 9),
                   ),
                 )
               else
@@ -89,7 +89,7 @@ class ReceiptDocument {
                             pw.Expanded(
                               child: pw.Text(
                                 '${item.quantity}x ${item.productName}',
-                                style: pw.TextStyle(
+                                style: const pw.TextStyle(
                                   fontSize: 10,
                                   fontWeight: pw.FontWeight.bold,
                                 ),
@@ -97,7 +97,7 @@ class ReceiptDocument {
                             ),
                             pw.Text(
                               currency.format(item.subtotal),
-                              style: pw.TextStyle(
+                              style: const pw.TextStyle(
                                 fontSize: 10,
                                 fontWeight: pw.FontWeight.bold,
                               ),
@@ -106,12 +106,12 @@ class ReceiptDocument {
                         ),
                         pw.Text(
                           '${currency.format(item.unitPrice)} un.',
-                          style: pw.TextStyle(fontSize: 8),
+                          style: const pw.TextStyle(fontSize: 8),
                         ),
                         if (item.notes != null && item.notes!.isNotEmpty)
                           pw.Text(
                             'Obs: ${item.notes}',
-                            style: pw.TextStyle(fontSize: 8),
+                            style: const pw.TextStyle(fontSize: 8),
                           ),
                       ],
                     ),
@@ -123,11 +123,11 @@ class ReceiptDocument {
                 children: [
                   pw.Text(
                     'TOTAL',
-                    style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+                    style: const pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
                   ),
                   pw.Text(
                     currency.format(order.total),
-                    style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+                    style: const pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
                   ),
                 ],
               ),
@@ -136,13 +136,13 @@ class ReceiptDocument {
               pw.Center(
                 child: pw.Text(
                   '*** NÃO É DOCUMENTO FISCAL ***',
-                  style: pw.TextStyle(fontSize: 9),
+                  style: const pw.TextStyle(fontSize: 9),
                 ),
               ),
               pw.Center(
                 child: pw.Text(
                   'Impresso em: ${dateFmt.format(DateTime.now())}',
-                  style: pw.TextStyle(fontSize: 8),
+                  style: const pw.TextStyle(fontSize: 8),
                 ),
               ),
               pw.SizedBox(height: 12),
