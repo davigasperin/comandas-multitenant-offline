@@ -47,7 +47,21 @@ class _OrdersList extends ConsumerWidget {
         error: (err, _) => ListView(
           children: [
             const SizedBox(height: 80),
-            Center(child: Text('Erro ao carregar comandas: $err')),
+            Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.wifi_off_rounded, size: 48, color: Colors.grey),
+                  const SizedBox(height: 16),
+                  Text('Erro ao carregar comandas: $err', textAlign: TextAlign.center),
+                  const SizedBox(height: 16),
+                  OutlinedButton(
+                    onPressed: () => ref.refresh(provider.future),
+                    child: const Text('Tentar novamente'),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
         data: (orders) {
@@ -56,9 +70,23 @@ class _OrdersList extends ConsumerWidget {
               children: [
                 const SizedBox(height: 80),
                 Center(
-                  child: Text(isClosed 
-                    ? 'Nenhuma comanda fechada.' 
-                    : 'Nenhuma comanda aberta no momento.'),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isClosed ? Icons.assignment_turned_in_outlined : Icons.receipt_long_outlined,
+                        size: 48,
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        isClosed
+                            ? 'Nenhuma comanda fechada.'
+                            : 'Nenhuma comanda aberta no momento.',
+                        style: const TextStyle(fontSize: 16, color: Colors.grey),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             );
@@ -78,7 +106,7 @@ class _OrdersList extends ConsumerWidget {
                   ),
                   borderRadius: BorderRadius.circular(8),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                     child: Row(
                       children: [
                         Expanded(
@@ -92,7 +120,7 @@ class _OrdersList extends ConsumerWidget {
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 6),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
@@ -104,7 +132,7 @@ class _OrdersList extends ConsumerWidget {
                                   order.status.label.toUpperCase(),
                                   style: TextStyle(
                                     fontSize: 12,
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w700,
                                     color: order.status.color,
                                   ),
                                 ),
@@ -112,12 +140,16 @@ class _OrdersList extends ConsumerWidget {
                             ],
                           ),
                         ),
-                        Text(
-                          currency.format(order.total),
-                          style: GoogleFonts.firaCode(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(context).colorScheme.onSurface,
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(minWidth: 84),
+                          child: Text(
+                            currency.format(order.total),
+                            textAlign: TextAlign.right,
+                            style: GoogleFonts.firaCode(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
                           ),
                         ),
                       ],
