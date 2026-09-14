@@ -7,7 +7,7 @@ class AppTheme {
   // Cores Baseadas no Design System "Real-Time / Operations" (Teal/Amber)
   static const Color primary = Color(0xFF0D9488); // Teal
   static const Color onPrimary = Color(0xFFFFFFFF);
-  static const Color secondary = Color(0xFF2DD4BF);
+  static const Color secondary = Color(0xFF0F766E); // Teal 700 para contraste WCAG AA
   static const Color accent = Color(0xFFD97706); // Amber
   static const Color background = Color(0xFFF0FDFA);
   static const Color danger = Color(0xFFDC2626);
@@ -68,6 +68,18 @@ class AppTheme {
           borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: primary, width: 2),
         ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: danger, width: 1.5),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: danger, width: 2),
+        ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
       cardTheme: CardThemeData(
         elevation: 0,
