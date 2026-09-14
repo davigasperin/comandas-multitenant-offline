@@ -6,7 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets('OrdersScreen renders loading, empty and populated states', (tester) async {
-    // 1. Loading state
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -29,14 +28,15 @@ void main() {
 
     await tester.pump();
     expect(find.text('Nenhuma comanda aberta no momento.'), findsOneWidget);
+    expect(find.byIcon(Icons.receipt_long_outlined), findsOneWidget);
 
-    // 2. Switch tab to closed
     await tester.tap(find.text('Fechadas'));
     await tester.pumpAndSettle();
     expect(find.text('Nenhuma comanda fechada.'), findsOneWidget);
+    expect(find.byIcon(Icons.assignment_turned_in_outlined), findsOneWidget);
   });
 
-  testWidgets('OrdersScreen renders list of orders', (tester) async {
+  testWidgets('OrdersScreen renders list of orders with formatted total', (tester) async {
     final fakeOrder = Order(
       id: 'ord_1',
       tableLabel: 'Mesa 99',
@@ -65,5 +65,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Mesa 99'), findsOneWidget);
     expect(find.text('ABERTA'), findsOneWidget);
+    expect(find.byType(ConstrainedBox), findsWidgets);
   });
 }
