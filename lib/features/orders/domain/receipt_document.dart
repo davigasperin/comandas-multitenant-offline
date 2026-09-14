@@ -41,7 +41,7 @@ class ReceiptDocument {
               pw.Center(
                 child: pw.Text(
                   'CONTROLE DE CONSUMO',
-                  style: const pw.TextStyle(fontSize: 10),
+                  style: pw.TextStyle(fontSize: 10),
                 ),
               ),
               pw.Divider(thickness: 1),
@@ -54,13 +54,13 @@ class ReceiptDocument {
                   ),
                   pw.Text(
                     order.status.label.toUpperCase(),
-                    style: const pw.TextStyle(fontSize: 10),
+                    style: pw.TextStyle(fontSize: 10),
                   ),
                 ],
               ),
               pw.Text(
                 'Abertura: ${dateFmt.format(order.openedAt)}',
-                style: const pw.TextStyle(fontSize: 9),
+                style: pw.TextStyle(fontSize: 9),
               ),
               pw.Divider(thickness: 1),
               pw.Text(
@@ -73,7 +73,7 @@ class ReceiptDocument {
                   padding: const pw.EdgeInsets.symmetric(vertical: 8),
                   child: pw.Text(
                     'Nenhum item lançado.',
-                    style: const pw.TextStyle(fontSize: 9),
+                    style: pw.TextStyle(fontSize: 9),
                   ),
                 )
               else
@@ -106,12 +106,12 @@ class ReceiptDocument {
                         ),
                         pw.Text(
                           '${currency.format(item.unitPrice)} un.',
-                          style: const pw.TextStyle(fontSize: 8),
+                          style: pw.TextStyle(fontSize: 8),
                         ),
                         if (item.notes != null && item.notes!.isNotEmpty)
                           pw.Text(
                             'Obs: ${item.notes}',
-                            style: const pw.TextStyle(fontSize: 8),
+                            style: pw.TextStyle(fontSize: 8),
                           ),
                       ],
                     ),
@@ -136,13 +136,13 @@ class ReceiptDocument {
               pw.Center(
                 child: pw.Text(
                   '*** NÃO É DOCUMENTO FISCAL ***',
-                  style: const pw.TextStyle(fontSize: 9),
+                  style: pw.TextStyle(fontSize: 9),
                 ),
               ),
               pw.Center(
                 child: pw.Text(
                   'Impresso em: ${dateFmt.format(DateTime.now())}',
-                  style: const pw.TextStyle(fontSize: 8),
+                  style: pw.TextStyle(fontSize: 8),
                 ),
               ),
               pw.SizedBox(height: 12),
