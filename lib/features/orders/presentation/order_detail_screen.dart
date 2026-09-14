@@ -29,11 +29,30 @@ class OrderDetailScreen extends ConsumerStatefulWidget {
 class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   bool _isClosing = false;
   bool _isAddingItem = false;
+  bool _isPrinting = false;
 
   void _invalidateAll() {
     ref.invalidate(orderDetailProvider(widget.orderId));
     ref.invalidate(openOrdersProvider);
     ref.invalidate(closedOrdersProvider);
+  }
+
+  Future<void> _handlePrint(Order order) async {
+    setState(() => _isPrinting = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final receiptService = ref.read(receiptServiceProvider);
+      await receiptService.printReceipt(order);
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('Erro ao imprimir comanda: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isPrinting = false);
+      }
+    }
   }
 
   Future<void> _confirmCloseOrder(BuildContext hostContext, Order order) async {
@@ -253,7 +272,28 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     final currency = NumberFormat.simpleCurrency(locale: 'pt_BR');
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Detalhe da comanda')),
+      appBar: AppBar(
+        title: const Text('Detalhe da comanda'),
+        actions: [
+          orderAsync.whenOrNull(
+                data: (order) => IconButton(
+                  tooltip: 'Imprimir comanda',
+                  icon: _isPrinting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.print_outlined),
+                  onPressed: _isPrinting ? null : () => _handlePrint(order),
+                ),
+              ) ??
+              const SizedBox.shrink(),
+        ],
+      ),
       body: orderAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => Center(child: Text('Erro: $err')),
