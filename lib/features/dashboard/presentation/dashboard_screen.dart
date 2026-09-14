@@ -16,7 +16,7 @@ class DashboardScreen extends ConsumerStatefulWidget {
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   bool _isSyncing = false;
 
-  Future<void> _logout(BuildContext context) async {
+  Future<void> _logout() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
@@ -112,7 +112,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             IconButton(
               tooltip: 'Sair',
               icon: const Icon(Icons.logout),
-              onPressed: () => _logout(context),
+              onPressed: _logout,
             ),
           ],
         ),

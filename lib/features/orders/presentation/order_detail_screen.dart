@@ -85,13 +85,12 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     }
   }
 
-  Future<void> _showAddProductSheet(BuildContext hostContext) async {
-    final scaffoldMessenger = ScaffoldMessenger.of(hostContext);
+  Future<void> _showAddProductSheet() async {
     final productsAsync = await ref.read(productsProvider.future);
     if (!mounted) return;
 
     if (productsAsync.isEmpty) {
-      scaffoldMessenger.showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Nenhum produto cadastrado no momento.')),
       );
       return;
@@ -103,7 +102,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     final currency = NumberFormat.simpleCurrency(locale: 'pt_BR');
 
     await showModalBottomSheet<void>(
-      context: hostContext,
+      context: context,
       isScrollControlled: true,
       showDragHandle: true,
       shape: const RoundedRectangleBorder(
@@ -308,7 +307,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                             const SizedBox(height: 16),
                             if (!isClosed)
                               OutlinedButton(
-                                onPressed: () => _showAddProductSheet(context),
+                                onPressed: _showAddProductSheet,
                                 child: const Text('Adicionar Primeiro Item'),
                               ),
                           ],
@@ -368,7 +367,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                           ),
                           onPressed: _isAddingItem || _isClosing
                               ? null
-                              : () => _showAddProductSheet(context),
+                              : _showAddProductSheet,
                           icon: _isAddingItem
                               ? const SizedBox(
                                   width: 16,
