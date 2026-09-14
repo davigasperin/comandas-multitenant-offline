@@ -1,0 +1,49 @@
+import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'offline_interceptor.dart';
+import 'sync_service.dart';
+
+import 'api_client.dart';
+import '../../features/auth/data/auth_repository.dart';
+import '../../features/tenant/data/tenant_repository.dart';
+import '../../features/orders/data/orders_repository.dart';
+
+final secureStorageProvider = Provider<FlutterSecureStorage>((ref) {
+  return const FlutterSecureStorage();
+});
+
+final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
+  throw UnimplementedError('sharedPreferencesProvider must be overridden');
+});
+
+final offlineInterceptorProvider = Provider<OfflineInterceptor>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return OfflineInterceptor(prefs);
+});
+
+final dioProvider = Provider<Dio>((ref) {
+  final storage = ref.watch(secureStorageProvider);
+  final offline = ref.watch(offlineInterceptorProvider);
+  return ApiClient(storage, offline).dio;
+});
+
+final syncServiceProvider = Provider<SyncService>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  final storage = ref.watch(secureStorageProvider);
+  return SyncService(ref.watch(dioProvider), prefs, storage);
+});
+
+final authRepositoryProvider = Provider<AuthRepository>((ref) {
+  return AuthRepository(ref.watch(dioProvider), ref.watch(secureStorageProvider));
+});
+
+final tenantRepositoryProvider = Provider<TenantRepository>((ref) {
+  return TenantRepository(ref.watch(dioProvider), ref.watch(secureStorageProvider));
+});
+
+final ordersRepositoryProvider = Provider<OrdersRepository>((ref) {
+  return OrdersRepository(ref.watch(dioProvider));
+});
