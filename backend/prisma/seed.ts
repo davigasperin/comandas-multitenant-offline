@@ -1,16 +1,24 @@
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
+import { hashPassword } from '../src/auth.utils';
 
 const prisma = new PrismaClient();
 
 async function main() {
+  const seedPassword = process.env.SEED_USER_PASSWORD;
+  if (!seedPassword) throw new Error('SEED_USER_PASSWORD is required');
+  const hashedPassword = await hashPassword(seedPassword);
+
   const user = await prisma.user.upsert({
     where: { email: 'demo@comandas.com' },
-    update: {},
+    update: {
+      password: hashedPassword,
+    },
     create: {
       id: 'usr_1',
       name: 'Garçom Demo',
       email: 'demo@comandas.com',
-      password: 'password123',
+      password: hashedPassword,
     },
   });
 
@@ -122,7 +130,7 @@ async function main() {
     });
   }
 
-  console.log('Seed completed successfully.');
+  console.log('Seed completed successfully with hashed user password.');
 }
 
 main()

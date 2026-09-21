@@ -8,12 +8,13 @@ datasource db {
 }
 
 model User {
-  id        String       @id @default(cuid())
-  name      String
-  email     String       @unique
-  password  String
-  tenants   UserTenant[]
-  createdAt DateTime     @default(now())
+  id            String         @id @default(cuid())
+  name          String
+  email         String         @unique
+  password      String
+  tenants       UserTenant[]
+  refreshTokens RefreshToken[]
+  createdAt     DateTime       @default(now())
 }
 
 model Tenant {
@@ -76,4 +77,18 @@ model IdempotencyKey {
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@id([tenantId, key])
+}
+
+model RefreshToken {
+  id         String    @id @default(cuid())
+  tokenHash  String    @unique
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  replacedBy String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([userId])
 }

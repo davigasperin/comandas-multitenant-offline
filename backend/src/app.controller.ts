@@ -1,12 +1,9 @@
-import { Body, Controller, Get, Post, Request, UnauthorizedException, UseGuards } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { PrismaService } from './prisma.service';
+import { Body, Controller, Get, Post, Request, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthGuard } from './auth.guard';
-
-interface LoginBody {
-  email?: unknown;
-  password?: unknown;
-}
+import { AuthService } from './auth.service';
+import { LoginDto, RefreshTokenDto } from './dto/auth.dto';
+import { PrismaService } from './prisma.service';
 
 interface AuthenticatedRequest {
   user: { sub: string };
@@ -15,26 +12,26 @@ interface AuthenticatedRequest {
 @Controller('v1')
 export class AppController {
   constructor(
-    private readonly jwtService: JwtService,
+    private readonly authService: AuthService,
     private readonly prisma: PrismaService,
   ) {}
 
+  @Throttle({ default: { limit: 5, ttl: 60_000, blockDuration: 60_000 } })
   @Post('auth/login')
-  async login(@Body() body: LoginBody) {
-    if (typeof body.email !== 'string' || typeof body.password !== 'string') {
-      throw new UnauthorizedException('E-mail ou senha inválidos.');
-    }
+  login(@Body() body: LoginDto) {
+    return this.authService.login(body.email, body.password);
+  }
 
-    const user = await this.prisma.user.findUnique({ where: { email: body.email } });
-    if (!user || user.password !== body.password) {
-      throw new UnauthorizedException('E-mail ou senha inválidos.');
-    }
+  @Throttle({ default: { limit: 10, ttl: 60_000, blockDuration: 60_000 } })
+  @Post('auth/refresh')
+  refresh(@Body() body: RefreshTokenDto) {
+    return this.authService.refresh(body.refresh_token);
+  }
 
-    return {
-      user: { id: user.id, name: user.name, email: user.email },
-      access_token: await this.jwtService.signAsync({ sub: user.id, email: user.email }),
-      refresh_token: 'fake-refresh-token',
-    };
+  @Post('auth/logout')
+  async logout(@Body() body: RefreshTokenDto) {
+    await this.authService.logout(body.refresh_token);
+    return { ok: true };
   }
 
   @UseGuards(AuthGuard)
@@ -44,8 +41,6 @@ export class AppController {
       where: { userId: request.user.sub },
       include: { tenant: true },
     });
-    return {
-      data: tenants.map(({ tenant, role }) => ({ ...tenant, role })),
-    };
+    return { data: tenants.map(({ tenant, role }) => ({ ...tenant, role })) };
   }
 }

@@ -17,6 +17,7 @@ import { AuthGuard } from './auth.guard';
 import { TenantGuard } from './tenant.guard';
 import { PrismaService } from './prisma.service';
 import { OrdersGateway } from './orders.gateway';
+import { AddItemDto, CreateOrderDto, OrdersQueryDto, UpdateOrderStatusDto } from './dto/orders.dto';
 
 interface RequestContext {
   tenantId: string;
@@ -75,16 +76,16 @@ export class OrdersController {
   }
 
   @Get()
-  async getOrders(@Request() req: RequestContext, @Query('status') statusString?: string) {
+  async getOrders(@Request() req: RequestContext, @Query() query: OrdersQueryDto) {
     let statuses: string[] | undefined;
-    if (typeof statusString === 'string' && statusString.trim()) {
-      statuses = statusString.split(',').map((s) => s.trim());
+    if (typeof query?.status === 'string' && query.status.trim()) {
+      statuses = query.status.split(',').map((s) => s.trim()).filter(Boolean);
     }
 
     const orders = await this.prisma.order.findMany({
       where: {
         tenantId: req.tenantId,
-        ...(statuses ? { status: { in: statuses } } : {}),
+        ...(statuses && statuses.length ? { status: { in: statuses } } : {}),
       },
       include: { items: true },
       orderBy: { opened_at: 'desc' },
@@ -93,16 +94,12 @@ export class OrdersController {
   }
 
   @Post()
-  async createOrder(@Request() req: RequestContext, @Body() body: any) {
+  async createOrder(@Request() req: RequestContext, @Body() body: CreateOrderDto) {
     const rawKey = req.headers['x-idempotency-key'];
     const key = Array.isArray(rawKey) ? rawKey[0] : rawKey;
 
     const cached = await this.checkIdempotency(req.tenantId, key, body);
     if (cached) return cached;
-
-    if (!body || typeof body.table_label !== 'string' || !body.table_label.trim()) {
-      throw new BadRequestException('Mesa/Comanda é obrigatória');
-    }
 
     const tableLabel = body.table_label.trim();
 
@@ -138,7 +135,7 @@ export class OrdersController {
   async updateOrderStatus(
     @Request() req: RequestContext,
     @Param('id') id: string,
-    @Body() body: { status: string },
+    @Body() body: UpdateOrderStatusDto,
   ) {
     const rawKey = req.headers['x-idempotency-key'];
     const key = Array.isArray(rawKey) ? rawKey[0] : rawKey;
@@ -146,10 +143,7 @@ export class OrdersController {
     const cached = await this.checkIdempotency(req.tenantId, key, body);
     if (cached) return cached;
 
-    const nextStatus = body?.status;
-    if (!nextStatus || typeof nextStatus !== 'string') {
-      throw new BadRequestException('Status é obrigatório');
-    }
+    const nextStatus = body.status;
 
     const allowedPrevious = Object.entries(VALID_TRANSITIONS).find(([, target]) => target === nextStatus)?.[0];
     if (!allowedPrevious) {
@@ -196,7 +190,7 @@ export class OrdersController {
   }
 
   @Post(':id/items')
-  async addItem(@Request() req: RequestContext, @Param('id') id: string, @Body() body: any) {
+  async addItem(@Request() req: RequestContext, @Param('id') id: string, @Body() body: AddItemDto) {
     const rawKey = req.headers['x-idempotency-key'];
     const key = Array.isArray(rawKey) ? rawKey[0] : rawKey;
 
@@ -211,15 +205,12 @@ export class OrdersController {
       throw new BadRequestException('Não é possível adicionar itens em comanda finalizada');
     }
 
-    const rawQuantity = Number(body?.quantity);
-    if (!Number.isInteger(rawQuantity) || rawQuantity <= 0) {
-      throw new BadRequestException('Quantidade deve ser um número inteiro positivo');
-    }
+    const rawQuantity = body.quantity;
 
-    let productName = typeof body?.product_name === 'string' ? body.product_name.trim() : '';
+    let productName = typeof body.product_name === 'string' ? body.product_name.trim() : '';
     let unitPrice = 20.0;
 
-    if (typeof body?.product_id === 'string' && body.product_id.trim()) {
+    if (typeof body.product_id === 'string' && body.product_id.trim()) {
       const product = await this.prisma.product.findFirst({
         where: { id: body.product_id, tenantId: req.tenantId },
       });
@@ -232,7 +223,7 @@ export class OrdersController {
       throw new BadRequestException('Produto é obrigatório');
     }
 
-    const notes = typeof body?.notes === 'string' && body.notes.trim() ? body.notes.trim() : undefined;
+    const notes = typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim() : undefined;
 
     const updated = await this.prisma.$transaction(async (tx) => {
       await tx.orderItem.create({
