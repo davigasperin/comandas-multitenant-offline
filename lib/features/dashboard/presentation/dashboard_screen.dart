@@ -78,6 +78,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Widget build(BuildContext context) {
     final pendingCount =
         ref.watch(pendingMutationCountProvider).valueOrNull ?? 0;
+    final rawRole = ref.watch(currentTenantRoleProvider).valueOrNull;
+    final role = const {'owner': 'manager', 'admin': 'manager'}[rawRole] ?? rawRole;
+    final canUseKds = const {'kitchen', 'cashier', 'manager'}.contains(role);
+    final canCreateOrder = const {'waiter', 'cashier', 'manager'}.contains(role);
 
     return DefaultTabController(
       length: 2,
@@ -107,7 +111,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ),
               onPressed: _isSyncing ? null : () => _handleSync(context),
             ),
-            IconButton(
+            if (canUseKds) IconButton(
               tooltip: 'KDS cozinha',
               icon: const Icon(Icons.view_kanban_outlined),
               onPressed: () => Navigator.of(context).push(
@@ -129,7 +133,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ],
         ),
         body: const OrdersScreen(),
-        floatingActionButton: const CreateOrderFab(),
+        floatingActionButton: canCreateOrder ? const CreateOrderFab() : null,
       ),
     );
   }

@@ -82,6 +82,7 @@ class AuthRepository {
     await _storage.delete(key: AppConstants.storageKeyAccessToken);
     await _storage.delete(key: AppConstants.storageKeyRefreshToken);
     await _storage.delete(key: AppConstants.storageKeySelectedTenantId);
+    await _storage.delete(key: AppConstants.storageKeySelectedTenantRole);
     await _storage.delete(key: AppConstants.storageKeyUserId);
   }
 

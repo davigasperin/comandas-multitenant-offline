@@ -11,6 +11,7 @@ class AppConstants {
   static const String storageKeyAccessToken = 'access_token';
   static const String storageKeyRefreshToken = 'refresh_token';
   static const String storageKeySelectedTenantId = 'selected_tenant_id';
+  static const String storageKeySelectedTenantRole = 'selected_tenant_role';
   static const String storageKeyUserId = 'user_id';
 
   // Header usado para isolar o tenant em cada request

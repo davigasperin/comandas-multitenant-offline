@@ -22,6 +22,7 @@ class TenantSwitchScreen extends ConsumerWidget {
   ) async {
     ref.read(socketServiceProvider).disconnect();
     await ref.read(tenantRepositoryProvider).selectTenant(tenant);
+    ref.invalidate(currentTenantRoleProvider);
     if (!context.mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => const DashboardScreen()),

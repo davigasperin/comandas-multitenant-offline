@@ -32,6 +32,10 @@ class TenantRepository {
       key: AppConstants.storageKeySelectedTenantId,
       value: tenant.id,
     );
+    await _storage.write(
+      key: AppConstants.storageKeySelectedTenantRole,
+      value: tenant.role,
+    );
   }
 
   Future<String?> getSelectedTenantId() {

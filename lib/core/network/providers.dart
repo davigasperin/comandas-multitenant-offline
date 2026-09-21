@@ -58,6 +58,11 @@ final currentTenantIdProvider = FutureProvider<String?>((ref) async {
   return storage.read(key: 'selected_tenant_id');
 });
 
+final currentTenantRoleProvider = FutureProvider<String?>((ref) async {
+  final storage = ref.watch(secureStorageProvider);
+  return storage.read(key: 'selected_tenant_role');
+});
+
 final pendingMutationCountProvider = StreamProvider<int>((ref) async* {
   final storage = ref.watch(mutationQueueStorageProvider);
   final secureStorage = ref.watch(secureStorageProvider);

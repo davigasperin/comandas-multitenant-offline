@@ -13,6 +13,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import * as crypto from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { AuthGuard } from './auth.guard';
 import { AddItemDto, CloseOrderDto, CreateOrderDto, QueryOrdersDto, UpdateOrderStatusDto } from './dto/orders.dto';
 import { OrdersGateway } from './orders.gateway';
@@ -44,32 +45,94 @@ export class OrdersController {
     private readonly ordersGateway: OrdersGateway,
   ) {}
 
+  private getIdempotencyKey(req: RequestContext): string {
+    const rawKey = req.headers['x-idempotency-key'];
+    const key = Array.isArray(rawKey) ? undefined : rawKey?.trim();
+    if (!key) {
+      throw new BadRequestException('X-Idempotency-Key é obrigatório e deve ser único');
+    }
+    return key;
+  }
+
   private async checkIdempotency(tenantId: string, key: string | undefined, payload: unknown) {
     if (!key) return null;
-    const existing = await this.prisma.idempotencyKey.findUnique({
-      where: { tenantId_key: { tenantId, key } },
-    });
+    const existing = await this.prisma.idempotencyKey.findUnique({ where: { tenantId_key: { tenantId, key } } });
     if (!existing) return null;
-
     const currentHash = computePayloadHash(payload);
-    if (existing.requestHash && existing.requestHash !== currentHash) {
-      throw new ConflictException('Chave de idempotência já utilizada com payload diferente');
-    }
+    if (existing.requestHash && existing.requestHash !== currentHash) throw new ConflictException('Chave de idempotência já utilizada com payload diferente');
+    if (existing.status === 'processing') throw new ConflictException('Chave de idempotência está sendo processada');
     return existing.response ? JSON.parse(existing.response) : null;
   }
 
-  private async saveIdempotency(tx: any, tenantId: string, key: string | undefined, payload: unknown, response: unknown) {
+  private async saveIdempotency(tx: Prisma.TransactionClient, tenantId: string, key: string | undefined, payload: unknown, response: unknown) {
     if (!key) return;
-    await tx.idempotencyKey
-      .create({
-        data: {
-          tenantId,
-          key,
-          requestHash: computePayloadHash(payload),
-          response: JSON.stringify(response),
-        },
-      })
-      .catch(() => {});
+    await tx.idempotencyKey.create({ data: { tenantId, key, status: 'completed', requestHash: computePayloadHash(payload), response: JSON.stringify(response), completed_at: new Date() } });
+  }
+
+  private async executeIdempotent<T>(
+    req: RequestContext,
+    operation: string,
+    payload: unknown,
+    mutate: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<{ value: T; replayed: boolean }> {
+    const key = this.getIdempotencyKey(req);
+    const requestHash = computePayloadHash({
+      operation,
+      tenantId: req.tenantId,
+      userId: req.user?.sub ?? null,
+      payload,
+    });
+
+    const existing = await this.prisma.idempotencyKey.findUnique({
+      where: { tenantId_key: { tenantId: req.tenantId, key } },
+    });
+    if (existing) {
+      if (existing.requestHash !== requestHash) {
+        throw new ConflictException('Chave de idempotência já utilizada em outra operação');
+      }
+      if (existing.status === 'completed' && existing.response) {
+        return { value: JSON.parse(existing.response) as T, replayed: true };
+      }
+      throw new ConflictException('Operação com esta chave ainda está sendo processada');
+    }
+
+    try {
+      const value = await this.prisma.$transaction(async (tx) => {
+        await tx.idempotencyKey.create({
+          data: {
+            tenantId: req.tenantId,
+            key,
+            status: 'processing',
+            requestHash,
+          },
+        });
+        const result = await mutate(tx);
+        await tx.idempotencyKey.update({
+          where: { tenantId_key: { tenantId: req.tenantId, key } },
+          data: {
+            status: 'completed',
+            response: JSON.stringify(result),
+            completed_at: new Date(),
+          },
+        });
+        return result;
+      });
+      return { value, replayed: false };
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const canonical = await this.prisma.idempotencyKey.findUnique({
+          where: { tenantId_key: { tenantId: req.tenantId, key } },
+        });
+        if (canonical?.requestHash !== requestHash) {
+          throw new ConflictException('Chave de idempotência já utilizada em outra operação');
+        }
+        if (canonical?.status === 'completed' && canonical.response) {
+          return { value: JSON.parse(canonical.response) as T, replayed: true };
+        }
+        throw new ConflictException('Operação concorrente ainda está sendo processada');
+      }
+      throw error;
+    }
   }
 
   @Get('products')
@@ -99,13 +162,13 @@ export class OrdersController {
       take: take + 1,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
       include: { items: true },
-      orderBy: { opened_at: 'desc' },
+      orderBy: [{ opened_at: 'desc' }, { id: 'desc' }],
     });
 
     let nextCursor: string | null = null;
     if (orders.length > take) {
-      const nextItem = orders.pop();
-      nextCursor = nextItem?.id ?? null;
+      orders.pop();
+      nextCursor = orders[orders.length - 1]?.id ?? null;
     }
 
     return {
@@ -120,17 +183,11 @@ export class OrdersController {
   @Roles('waiter', 'cashier', 'manager')
   @Post()
   async createOrder(@Request() req: RequestContext, @Body() body: CreateOrderDto) {
-    const rawKey = req.headers['x-idempotency-key'];
-    const key = Array.isArray(rawKey) ? rawKey[0] : rawKey;
-
-    const cached = await this.checkIdempotency(req.tenantId, key, body);
-    if (cached) return cached;
-
     const tableLabel = body.table_label.trim();
     const userId = req.user?.sub;
 
-    const created = await this.prisma.$transaction(async (tx) => {
-      const order = await tx.order.create({
+    const result = await this.executeIdempotent(req, 'POST /v1/orders', body, async (tx) => {
+      return tx.order.create({
         data: {
           tenantId: req.tenantId,
           table_label: tableLabel,
@@ -147,12 +204,10 @@ export class OrdersController {
         include: { items: true, history: true },
       });
 
-      await this.saveIdempotency(tx, req.tenantId, key, body, order);
-      return order;
     });
 
-    this.ordersGateway.emitToTenant(req.tenantId, 'order:created', created);
-    return created;
+    if (!result.replayed) this.ordersGateway.emitToTenant(req.tenantId, 'order:created', result.value);
+    return result.value;
   }
 
   @Get(':id')

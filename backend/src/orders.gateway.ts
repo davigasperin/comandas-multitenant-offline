@@ -47,9 +47,16 @@ export class OrdersGateway implements OnGatewayConnection {
       const access = await this.prisma.userTenant.findUnique({
         where: { userId_tenantId: { userId: payload.sub, tenantId } },
       });
-      if (!access) throw new Error('Acesso ao tenant negado');
+       if (!access) throw new Error('Acesso ao tenant negado');
+       const roleAliases: Record<string, string> = { owner: 'manager', admin: 'manager' };
+       const role = roleAliases[access.role] ?? access.role;
+       if (!['waiter', 'kitchen', 'cashier', 'manager'].includes(role)) {
+         throw new Error('Perfil operacional desconhecido');
+       }
 
-      client.data.userId = payload.sub;
+       client.data.userId = payload.sub;
+       client.data.role = role;
+
       client.data.tenantId = tenantId;
       await client.join(tenantId);
       if (typeof client.emit === 'function') client.emit('authenticated');

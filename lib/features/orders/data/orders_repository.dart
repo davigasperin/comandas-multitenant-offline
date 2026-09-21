@@ -11,29 +11,30 @@ class OrdersRepository {
 
   /// Lista as comandas do tenant ativo (o tenant já vai no header,
   /// injetado pelo AuthTenantInterceptor — não precisa passar aqui).
-  Future<List<Order>> getOpenOrders() async {
-    try {
-      final response = await _dio.get('/orders', queryParameters: {
-        'status': 'open,sentToKitchen,delivered',
-      });
-      final data = response.data['data'] as List<dynamic>;
-      return data
-          .map((j) => Order.fromJson(j as Map<String, dynamic>))
-          .toList();
-    } on DioException catch (e) {
-      _rethrowAsApiException(e);
-    }
-  }
+  Future<List<Order>> getOpenOrders() =>
+      _getAllOrders('open,sentToKitchen,delivered');
 
-  Future<List<Order>> getClosedOrders() async {
+  Future<List<Order>> getClosedOrders() => _getAllOrders('closed');
+
+  Future<List<Order>> _getAllOrders(String status) async {
+    final orders = <Order>[];
+    String? cursor;
+
     try {
-      final response = await _dio.get('/orders', queryParameters: {
-        'status': 'closed',
-      });
-      final data = response.data['data'] as List<dynamic>;
-      return data
-          .map((j) => Order.fromJson(j as Map<String, dynamic>))
-          .toList();
+      do {
+        final response = await _dio.get('/orders', queryParameters: {
+          'status': status,
+          'limit': 100,
+          if (cursor != null) 'cursor': cursor,
+        });
+        final payload = response.data as Map<String, dynamic>;
+        final data = payload['data'] as List<dynamic>;
+        orders.addAll(data
+            .map((j) => Order.fromJson(j as Map<String, dynamic>)));
+        final pagination = payload['pagination'] as Map<String, dynamic>?;
+        cursor = pagination?['next_cursor'] as String?;
+      } while (cursor != null);
+      return orders;
     } on DioException catch (e) {
       _rethrowAsApiException(e);
     }
