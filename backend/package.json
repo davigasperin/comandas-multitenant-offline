@@ -7,7 +7,7 @@
     "start:dev": "ts-node-dev --respawn src/main.ts",
     "prisma:seed": "ts-node prisma/seed.ts",
     "migrate:passwords": "ts-node src/migrate-passwords.ts",
-    "test": "ts-node src/idempotency.test.ts && ts-node src/security.test.ts && ts-node src/concurrency-financial.test.ts && ts-node src/e2e-protocol.test.ts",
+    "test": "ts-node src/idempotency.test.ts && ts-node src/security.test.ts && ts-node src/concurrency-financial.test.ts && ts-node src/rbac.test.ts && ts-node src/e2e-protocol.test.ts",
     "test:idempotency": "ts-node src/idempotency.test.ts",
     "test:security": "ts-node src/security.test.ts"
   },
@@ -17,6 +17,7 @@
     "@nestjs/jwt": "^10.2.0",
     "@nestjs/platform-express": "^10.3.0",
     "@nestjs/platform-socket.io": "^10.4.22",
+    "@nestjs/swagger": "^7.4.2",
     "@nestjs/throttler": "^6.7.0",
     "@nestjs/websockets": "^10.4.22",
     "@prisma/client": "^5.22.0",
@@ -25,7 +26,8 @@
     "dotenv": "^18.0.1",
     "reflect-metadata": "^0.2.1",
     "rxjs": "^7.8.1",
-    "socket.io": "^4.8.3"
+    "socket.io": "^4.8.3",
+    "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

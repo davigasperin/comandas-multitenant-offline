@@ -5,6 +5,7 @@ interface RequestWithAuth {
   user?: { sub: string };
   headers: Record<string, string | string[] | undefined>;
   tenantId?: string;
+  role?: string;
 }
 
 @Injectable()
@@ -22,6 +23,7 @@ export class TenantGuard implements CanActivate {
     });
     if (!access) throw new ForbiddenException('Usuário não pertence a este tenant');
     request.tenantId = normalizedTenantId;
+    request.role = access.role;
     return true;
   }
 }
