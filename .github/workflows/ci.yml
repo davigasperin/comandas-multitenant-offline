@@ -35,6 +35,8 @@ jobs:
   backend_build:
     name: NestJS Build & Test
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: file:./test.db
     defaults:
       run:
         working-directory: ./backend
@@ -53,5 +55,8 @@ jobs:
       - name: Build project
         run: npm run build
 
+      - name: Apply test database migrations
+        run: npx prisma migrate deploy
+
       - name: Run Backend Tests
-        run: npx ts-node src/idempotency.test.ts
+        run: npm run test:idempotency
