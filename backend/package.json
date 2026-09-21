@@ -4,7 +4,9 @@
   "scripts": {
     "build": "tsc",
     "start": "ts-node src/main.ts",
-    "start:dev": "ts-node-dev --respawn src/main.ts"
+    "start:dev": "ts-node-dev --respawn src/main.ts",
+    "prisma:seed": "ts-node prisma/seed.ts",
+    "test:idempotency": "ts-node src/idempotency.test.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.0",
