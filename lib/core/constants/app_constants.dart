@@ -5,6 +5,7 @@ class AppConstants {
 
   // Ajuste para a URL do backend (ex.: NestJS rodando em produção/local)
   static const String baseUrl = 'http://localhost:3000/v1';
+  static const String wsUrl = 'http://localhost:3000/orders';
 
   // Chaves de storage seguro
   static const String storageKeyAccessToken = 'access_token';

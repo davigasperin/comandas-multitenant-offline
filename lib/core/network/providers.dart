@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'offline_interceptor.dart';
 import 'sync_service.dart';
+import 'socket_service.dart';
 
 import 'api_client.dart';
 import '../../features/auth/data/auth_repository.dart';
@@ -35,6 +36,18 @@ final syncServiceProvider = Provider<SyncService>((ref) {
   final prefs = ref.watch(sharedPreferencesProvider);
   final storage = ref.watch(secureStorageProvider);
   return SyncService(ref.watch(dioProvider), prefs, storage);
+});
+
+final socketServiceProvider = Provider<SocketService>((ref) {
+  final storage = ref.watch(secureStorageProvider);
+  final service = SocketService(storage);
+  ref.onDispose(() => service.dispose());
+  return service;
+});
+
+final socketConnectionStateProvider = StreamProvider.autoDispose<SocketConnectionState>((ref) {
+  final socketService = ref.watch(socketServiceProvider);
+  return socketService.connectionStateStream;
 });
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
