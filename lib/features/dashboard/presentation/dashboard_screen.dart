@@ -75,7 +75,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pendingCount = ref.watch(syncServiceProvider).pendingCount;
+    final pendingCount = ref.watch(pendingMutationCountProvider).valueOrNull ??
+        ref.watch(syncServiceProvider).pendingCount;
 
     return DefaultTabController(
       length: 2,

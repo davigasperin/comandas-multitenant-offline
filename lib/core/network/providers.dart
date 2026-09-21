@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'mutation_queue_storage.dart';
+import 'queued_mutation.dart';
 import 'offline_interceptor.dart';
 import 'sync_service.dart';
 import 'socket_service.dart';
@@ -23,7 +24,9 @@ final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
 });
 
 final mutationQueueStorageProvider = Provider<MutationQueueStorage>((ref) {
-  return MutationQueueStorage(ref.watch(sharedPreferencesProvider));
+  final storage = MutationQueueStorage(ref.watch(sharedPreferencesProvider));
+  ref.onDispose(storage.dispose);
+  return storage;
 });
 
 final offlineInterceptorProvider = Provider<OfflineInterceptor>((ref) {
@@ -44,6 +47,14 @@ final syncServiceProvider = Provider<SyncService>((ref) {
   final service = SyncService(ref.watch(dioProvider), prefs, storage, queue);
   ref.onDispose(() => service.dispose());
   return service;
+});
+
+final pendingMutationCountProvider = StreamProvider<int>((ref) async* {
+  final storage = ref.watch(mutationQueueStorageProvider);
+  yield storage.getAll().where((m) => m.status == MutationStatus.pending || m.status == MutationStatus.failed).length;
+  await for (final _ in storage.changes) {
+    yield storage.getAll().where((m) => m.status == MutationStatus.pending || m.status == MutationStatus.failed).length;
+  }
 });
 
 final socketServiceProvider = Provider<SocketService>((ref) {

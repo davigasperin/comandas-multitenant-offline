@@ -16,7 +16,9 @@ class OfflineInterceptor extends Interceptor {
     final owner = request.extra['owner'];
     final tenant = request.headers['X-Tenant-Id'];
     if (owner == null || tenant == null || request.method != 'GET' ||
-        !RegExp(r'^/orders(?:/[a-zA-Z0-9_-]+)?$').hasMatch(request.path)) return null;
+        !RegExp(r'^/orders(?:/[a-zA-Z0-9_-]+)?$').hasMatch(request.path)) {
+      return null;
+    }
     final query = request.queryParameters.entries.toList()
       ..sort((a, b) => a.key.compareTo(b.key));
     return '$cachePrefix${jsonEncode([owner, tenant, request.path, query.map((e) => [e.key, e.value]).toList()])}';

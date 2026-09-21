@@ -37,11 +37,21 @@ class OrdersRepository {
 
   Future<Order> createOrder({required String tableLabel}) async {
     try {
+      final idempKey = 'idemp_create_${DateTime.now().microsecondsSinceEpoch}';
       final response = await _dio.post(
         '/orders', 
         data: {'table_label': tableLabel},
-        options: Options(headers: {'X-Idempotency-Key': DateTime.now().toIso8601String()}),
+        options: Options(headers: {'X-Idempotency-Key': idempKey}),
       );
+      if (response.statusCode == 202) {
+        return Order(
+          id: 'temp_${DateTime.now().millisecondsSinceEpoch}',
+          tableLabel: tableLabel,
+          status: OrderStatus.open,
+          items: const [],
+          openedAt: DateTime.now(),
+        );
+      }
       return Order.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       if (e.response?.statusCode == 202) {
@@ -83,6 +93,7 @@ class OrdersRepository {
     String? notes,
   }) async {
     try {
+      final idempKey = 'idemp_item_${DateTime.now().microsecondsSinceEpoch}';
       final response = await _dio.post(
         '/orders/$orderId/items', 
         data: {
@@ -90,8 +101,17 @@ class OrdersRepository {
           'quantity': quantity,
           'notes': notes,
         },
-        options: Options(headers: {'X-Idempotency-Key': DateTime.now().toIso8601String()}),
+        options: Options(headers: {'X-Idempotency-Key': idempKey}),
       );
+      if (response.statusCode == 202) {
+        return Order(
+          id: orderId,
+          tableLabel: '...',
+          status: OrderStatus.open,
+          items: const [],
+          openedAt: DateTime.now(),
+        );
+      }
       return Order.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       if (e.response?.statusCode == 202) {
@@ -109,8 +129,10 @@ class OrdersRepository {
 
   Future<void> closeOrder(String orderId) async {
     try {
-      await _dio.post('/orders/$orderId/close',
-          options: Options(headers: {'X-Idempotency-Key': DateTime.now().toIso8601String()}));
+      final idempKey = 'idemp_close_${DateTime.now().microsecondsSinceEpoch}';
+      final response = await _dio.post('/orders/$orderId/close',
+          options: Options(headers: {'X-Idempotency-Key': idempKey}));
+      if (response.statusCode == 202) return;
     } on DioException catch (e) {
       if (e.response?.statusCode == 202) return;
       _rethrowAsApiException(e);
@@ -119,11 +141,13 @@ class OrdersRepository {
 
   Future<void> updateOrderStatus({required String orderId, required String status}) async {
     try {
-      await _dio.patch(
+      final idempKey = 'idemp_status_${DateTime.now().microsecondsSinceEpoch}';
+      final response = await _dio.patch(
         '/orders/$orderId/status',
         data: {'status': status},
-        options: Options(headers: {'X-Idempotency-Key': DateTime.now().toIso8601String()}),
+        options: Options(headers: {'X-Idempotency-Key': idempKey}),
       );
+      if (response.statusCode == 202) return;
     } on DioException catch (e) {
       if (e.response?.statusCode == 202) return;
       _rethrowAsApiException(e);

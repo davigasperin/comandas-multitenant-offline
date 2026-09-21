@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'queued_mutation.dart';
@@ -5,8 +6,13 @@ import 'queued_mutation.dart';
 class MutationQueueStorage {
   static const String queueStorageKey = 'durable_mutation_queue_v1';
   final SharedPreferences prefs;
+  final _changes = StreamController<void>.broadcast();
 
   MutationQueueStorage(this.prefs);
+
+  Stream<void> get changes => _changes.stream;
+
+  void dispose() => _changes.close();
 
   List<QueuedMutation> getAll() {
     final raw = prefs.getStringList(queueStorageKey);
@@ -21,6 +27,7 @@ class MutationQueueStorage {
   Future<void> saveAll(List<QueuedMutation> mutations) async {
     final raw = mutations.map((m) => jsonEncode(m.toJson())).toList();
     await prefs.setStringList(queueStorageKey, raw);
+    if (!_changes.isClosed) _changes.add(null);
   }
 
   Future<void> enqueue(QueuedMutation mutation) async {

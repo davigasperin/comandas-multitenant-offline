@@ -3,7 +3,6 @@ import 'package:comandas_app/core/network/mutation_queue_storage.dart';
 import 'package:comandas_app/core/network/queued_mutation.dart';
 import 'package:comandas_app/core/network/sync_service.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -27,7 +26,7 @@ void main() {
       idempotencyKey: 'idemp_1',
       method: 'POST',
       path: '/orders',
-      body: {'table_label': 'Mesa 10'},
+      body: const {'table_label': 'Mesa 10'},
       tenantId: 'ten_test',
       userId: 'usr_test',
       createdAt: DateTime.now().subtract(const Duration(seconds: 5)),
@@ -38,7 +37,7 @@ void main() {
       idempotencyKey: 'idemp_2',
       method: 'POST',
       path: '/orders/ord_10/items',
-      body: {'product_name': 'Suco', 'quantity': 2},
+      body: const {'product_name': 'Suco', 'quantity': 2},
       tenantId: 'ten_test',
       userId: 'usr_test',
       createdAt: DateTime.now(),
