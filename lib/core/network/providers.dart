@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'mutation_queue_storage.dart';
 import 'offline_interceptor.dart';
 import 'sync_service.dart';
 import 'socket_service.dart';
@@ -21,9 +22,13 @@ final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
   throw UnimplementedError('sharedPreferencesProvider must be overridden');
 });
 
+final mutationQueueStorageProvider = Provider<MutationQueueStorage>((ref) {
+  return MutationQueueStorage(ref.watch(sharedPreferencesProvider));
+});
+
 final offlineInterceptorProvider = Provider<OfflineInterceptor>((ref) {
   final prefs = ref.watch(sharedPreferencesProvider);
-  return OfflineInterceptor(prefs);
+  return OfflineInterceptor(prefs, ref.watch(mutationQueueStorageProvider));
 });
 
 final dioProvider = Provider<Dio>((ref) {

@@ -48,7 +48,8 @@ void main() {
   test('Scoped cache resolves on offline error', () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
-    final interceptor = OfflineInterceptor(prefs);
+    final storage = MutationQueueStorage(prefs);
+    final interceptor = OfflineInterceptor(prefs, storage);
 
     final resHandler = _FakeResponseHandler();
     interceptor.onResponse(
