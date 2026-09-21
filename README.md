@@ -191,10 +191,16 @@ cd backend
 # Instalar dependências
 npm install
 
+# Criar configuração local; JWT_SECRET deve ter pelo menos 32 bytes
+cp .env.example .env
+
 # Executar migrações do banco SQLite
 npx prisma migrate deploy
 
-# Popular dados de demonstração
+# Em atualização de banco legado, converter senhas plaintext explicitamente uma vez
+npm run migrate:passwords
+
+# Popular dados de demonstração; defina SEED_USER_PASSWORD no ambiente
 npm run prisma:seed
 
 # Iniciar servidor em modo de desenvolvimento

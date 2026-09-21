@@ -37,6 +37,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: file:./test.db
+      JWT_SECRET: ${{ format('{0}{1}', github.run_id, '0123456789012345678901234567890123456789') }}
+      CORS_ORIGINS: http://localhost:3000
+      SEED_USER_PASSWORD: ${{ format('ci-{0}-seed-password', github.run_id) }}
     defaults:
       run:
         working-directory: ./backend
@@ -59,4 +62,4 @@ jobs:
         run: npx prisma migrate deploy
 
       - name: Run Backend Tests
-        run: npm run test:idempotency
+        run: npm test
