@@ -53,7 +53,7 @@ export class OrdersController {
     if (existing.requestHash && existing.requestHash !== currentHash) {
       throw new ConflictException('Chave de idempotência já utilizada com payload diferente');
     }
-    return JSON.parse(existing.response);
+    return existing.response ? JSON.parse(existing.response) : null;
   }
 
   private async saveIdempotency(tx: any, tenantId: string, key: string | undefined, payload: unknown, response: unknown) {
