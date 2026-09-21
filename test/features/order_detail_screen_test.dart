@@ -1,9 +1,26 @@
 import 'package:comandas_app/features/orders/domain/order_model.dart';
+import 'dart:typed_data';
+
+import 'package:comandas_app/core/network/providers.dart';
+import 'package:comandas_app/features/orders/data/receipt_service.dart';
 import 'package:comandas_app/features/orders/domain/product_model.dart';
 import 'package:comandas_app/features/orders/presentation/order_detail_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+class MockReceiptService implements ReceiptService {
+  bool printCalled = false;
+
+  @override
+  Future<Uint8List> generateReceiptPdf(Order order) async => Uint8List(0);
+
+  @override
+  Future<bool> printReceipt(Order order) async {
+    printCalled = true;
+    return true;
+  }
+}
 
 void main() {
   final fakeOrder = Order(
@@ -21,7 +38,9 @@ void main() {
     openedAt: DateTime.now(),
   );
 
-  testWidgets('OrderDetailScreen renders items, total and Add Item button', (tester) async {
+  testWidgets('OrderDetailScreen renders items, total and prints receipt', (tester) async {
+    final mockReceiptService = MockReceiptService();
+
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -29,6 +48,7 @@ void main() {
           productsProvider.overrideWith((ref) => Future.value([
             const Product(id: 'p1', name: 'Suco', price: 10.0),
           ])),
+          receiptServiceProvider.overrideWithValue(mockReceiptService),
         ],
         child: const MaterialApp(
           home: OrderDetailScreen(orderId: 'ord_1'),
@@ -41,7 +61,12 @@ void main() {
     expect(find.text('Mesa 99'), findsOneWidget);
     expect(find.text('2x Cerveja'), findsOneWidget);
     expect(find.text('R\$ 30,00'), findsNWidgets(2)); // Um no item (subtotal), um no Total da comanda
-    expect(find.text('Item'), findsOneWidget); // Add Item button
+    expect(find.text('Item'), findsOneWidget);
+    expect(find.byTooltip('Imprimir comanda'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Imprimir comanda'));
+    await tester.pumpAndSettle();
+    expect(mockReceiptService.printCalled, isTrue);
   });
 
   testWidgets('OrderDetailScreen hides Add Item button if status is closed', (tester) async {
