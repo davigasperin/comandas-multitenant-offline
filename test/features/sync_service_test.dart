@@ -12,7 +12,7 @@ import '../mocks/fake_secure_storage.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('SyncService replays pending mutations FIFO and clears queue on success', () async {
+  test('SyncService reenvia mutações pendentes em FIFO e limpa a fila após sucesso', () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     final queue = MutationQueueStorage(prefs);

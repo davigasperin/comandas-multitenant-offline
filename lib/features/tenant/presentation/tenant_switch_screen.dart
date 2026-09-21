@@ -51,7 +51,7 @@ class TenantSwitchScreen extends ConsumerWidget {
                 child: ListTile(
                   leading: CircleAvatar(child: Text(tenant.name[0])),
                   title: Text(tenant.name),
-                  subtitle: Text(tenant.role),
+                  subtitle: Text(tenant.roleLabel),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => _selectAndContinue(context, ref, tenant),
                 ),

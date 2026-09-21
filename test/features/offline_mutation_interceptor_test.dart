@@ -27,7 +27,7 @@ class _FakeErrorHandler extends ErrorInterceptorHandler {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('OfflineInterceptor intercepts failed mutation and enqueues it with 202', () async {
+  test('OfflineInterceptor intercepta mutação com falha e a enfileira com 202', () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     final queue = MutationQueueStorage(prefs);

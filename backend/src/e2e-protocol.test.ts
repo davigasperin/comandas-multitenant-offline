@@ -11,7 +11,7 @@ import { hashPassword } from './auth.utils';
 import { JwtService } from '@nestjs/jwt';
 
 async function runE2eSuite() {
-  console.log('Starting E2E Protocol & Security Suite...');
+  console.log('Iniciando suíte E2E de protocolo e segurança...');
 
   const tempDbName = `test_e2e_${Date.now()}_${process.pid}.db`;
   const tempDbPath = path.resolve(__dirname, `../prisma/${tempDbName}`);
@@ -102,7 +102,7 @@ async function runE2eSuite() {
       },
     });
 
-    console.log('Testing HTTP CORS...');
+    console.log('Testando CORS HTTP...');
     const corsAllowedRes = await fetch(`${baseUrl}/health`, {
       method: 'GET',
       headers: { Origin: 'http://localhost:3000' },
@@ -115,7 +115,7 @@ async function runE2eSuite() {
     });
     assert.strictEqual(corsDeniedRes.headers.get('access-control-allow-origin'), null);
 
-    console.log('Testing Authentication Login...');
+    console.log('Testando autenticação de login...');
     const invalidLoginRes = await fetch(`${baseUrl}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
@@ -133,7 +133,7 @@ async function runE2eSuite() {
     assert.ok(loginData.access_token);
     assert.ok(loginData.refresh_token);
 
-    console.log('Testing Refresh Concurrency (Strict Single-Use)...');
+    console.log('Testando concorrência de renovação com uso único estrito...');
     const refresh1Promise = fetch(`${baseUrl}/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
@@ -153,7 +153,7 @@ async function runE2eSuite() {
     assert.ok(refData.access_token);
     assert.ok(refData.refresh_token);
 
-    console.log('Testing REST Tenant Isolation...');
+    console.log('Testando isolamento de empresas via REST...');
     const forbiddenTenantRes = await fetch(`${baseUrl}/orders`, {
       method: 'GET',
       headers: {
@@ -174,7 +174,7 @@ async function runE2eSuite() {
     });
     assert.strictEqual(allowedTenantRes.status, 200);
 
-    console.log('Testing Logout...');
+    console.log('Testando encerramento de sessão...');
     const logoutRes = await fetch(`${baseUrl}/auth/logout`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
@@ -189,7 +189,7 @@ async function runE2eSuite() {
     });
     assert.strictEqual(postLogoutRefresh.status, 401);
 
-    console.log('Testing WebSocket Security & Gateway...');
+    console.log('Testando segurança e gateway WebSocket...');
 
     const socketAuth = Client(wsUrl, {
       transports: ['websocket'],
@@ -312,7 +312,7 @@ async function runE2eSuite() {
       { Origin: 'http://malicious-origin.com' }
     );
 
-    console.log('E2E Protocol & Security Suite PASSED successfully!');
+    console.log('Suíte E2E de protocolo e segurança concluída com sucesso!');
   } finally {
     for (const s of openSockets) {
       try {
@@ -329,6 +329,6 @@ async function runE2eSuite() {
 }
 
 runE2eSuite().catch((err) => {
-  console.error('E2E Protocol & Security Suite FAILED:', err);
+  console.error('Falha na suíte E2E de protocolo e segurança:', err);
   process.exit(1);
 });

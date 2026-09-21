@@ -130,7 +130,7 @@ class SyncService {
             await queue.remove(mutation.id);
             syncedCount++;
           } else if (statusCode == 409) {
-            // Conflict / idempotency duplicate -> safe to treat as delivered/acknowledged
+            // Remove a operação ao receber HTTP 409; comportamento requer revisão
             await queue.remove(mutation.id);
             syncedCount++;
           } else {
@@ -158,7 +158,7 @@ class SyncService {
         } on DioException catch (e) {
           final statusCode = e.response?.statusCode;
           if (statusCode == 400 || statusCode == 404 || statusCode == 422) {
-            // Client error -> permanent fail
+            // Erro permanente do cliente (4xx) -> falha definitiva sem bloquear itens seguintes da fila
             await queue.updateStatus(
               mutation.id,
               MutationStatus.failed,
@@ -166,9 +166,11 @@ class SyncService {
               retryCount: mutation.retryCount + 1,
             );
           } else if (statusCode == 409) {
+            // Idempotência já processada no servidor
             await queue.remove(mutation.id);
             syncedCount++;
           } else {
+            // Falha transitória de rede -> recua com backoff exponencial
             final nextRetry = mutation.retryCount + 1;
             if (nextRetry >= 5) {
               await queue.updateStatus(

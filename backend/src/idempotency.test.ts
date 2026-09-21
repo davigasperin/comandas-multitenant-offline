@@ -11,7 +11,7 @@ async function run() {
   const runId = `${Date.now()}_${process.pid}`;
   const tenantId = `ten_test_${runId}`;
   await prisma.tenant.create({
-    data: { id: tenantId, name: 'Tenant Test', role: 'admin' },
+    data: { id: tenantId, name: 'Empresa de teste', role: 'admin' },
   });
 
   const emittedEvents: Array<{ tenantId: string; event: string; data: any }> = [];
@@ -67,7 +67,7 @@ async function run() {
   assert.ok(emittedEvents.some((e) => e.event === 'order:created' && e.data.id === res1.id));
   assert.ok(emittedEvents.some((e) => e.event === 'order:updated' && e.data.status === 'delivered'));
 
-  // Gateway auth & tenant membership test
+  // Teste de autenticação do gateway e associação à empresa
   const testSecret = '1234567890123456789012345678901234567890';
   const jwt = new JwtService({ secret: testSecret });
   const realGateway = new OrdersGateway(jwt, prisma);
@@ -83,7 +83,7 @@ async function run() {
   await realGateway.handleConnection(mockClient);
   assert.strictEqual(disconnected, true, 'Invalid token must disconnect client');
 
-  // Test valid token with valid tenant membership
+  // Teste de token válido com associação válida à empresa
   const testUserId = `usr_test_${runId}`;
   await prisma.user.create({
     data: {
@@ -114,7 +114,7 @@ async function run() {
   assert.strictEqual(validDisconnected, false, 'Valid client must not disconnect');
   assert.strictEqual(validJoinedRoom, tenantId, 'Valid client must join tenant room');
 
-  console.log('Backend orders controller, idempotency, and gateway tests passed.');
+  console.log('Testes do controlador de pedidos, idempotência e gateway concluídos.');
   await prisma.$disconnect();
 }
 

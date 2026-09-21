@@ -8,7 +8,7 @@ on:
 
 jobs:
   flutter_test:
-    name: Flutter Analyze & Test
+    name: Análise e testes do Flutter
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -33,7 +33,7 @@ jobs:
         run: flutter test
 
   backend_build:
-    name: NestJS Build & Test
+    name: Compilação e testes do NestJS
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: file:./test.db

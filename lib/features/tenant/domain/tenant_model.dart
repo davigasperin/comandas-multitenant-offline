@@ -7,7 +7,28 @@ class Tenant extends Equatable {
   final String id;
   final String name;
   final String? logoUrl;
-  final String role; // ex.: 'owner', 'manager', 'waiter'
+  final String role;
+
+  String get roleLabel {
+    switch (role) {
+      case 'owner':
+        return 'Proprietário';
+      case 'manager':
+        return 'Gerente';
+      case 'waiter':
+        return 'Garçom';
+      case 'kitchen':
+        return 'Cozinha';
+      case 'admin':
+        return 'Administrador';
+      case 'cashier':
+        return 'Caixa';
+      case 'staff':
+        return 'Equipe';
+      default:
+        return 'Membro';
+    }
+  }
 
   const Tenant({
     required this.id,

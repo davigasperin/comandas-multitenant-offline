@@ -27,7 +27,7 @@ class StandardReceiptService implements ReceiptService {
         }
       }
     } catch (_) {
-      // Fallback gracioso caso offline ou falha na listagem de tenants
+      // Contingência segura para modo offline ou falha na listagem de empresas
     }
     return 'Estabelecimento';
   }

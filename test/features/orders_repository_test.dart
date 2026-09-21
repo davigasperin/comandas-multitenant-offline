@@ -29,7 +29,7 @@ void main() {
     ],
   };
 
-  test('getOpenOrders parses JSON correctly', () async {
+  test('getOpenOrders interpreta JSON corretamente', () async {
     dio.httpClientAdapter = FakeHttpClientAdapter((options) async {
       expect(options.queryParameters['status'], 'open,sentToKitchen,delivered');
       return FakeHttpClientAdapter.json({'data': [orderJson]}, 200);
@@ -42,7 +42,7 @@ void main() {
     expect(orders.first.items.first.productName, 'Agua');
   });
 
-  test('createOrder sends table_label and parses new Order', () async {
+  test('createOrder envia table_label e interpreta a nova comanda', () async {
     dio.httpClientAdapter = FakeHttpClientAdapter((options) async {
       expect(options.method, 'POST');
       expect(options.data['table_label'], 'Mesa 2');

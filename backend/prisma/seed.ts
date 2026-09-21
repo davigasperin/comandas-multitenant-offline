@@ -142,7 +142,7 @@ async function main() {
     });
   }
 
-  console.log('Seed completed successfully with hashed user password and integer cents.');
+  console.log('Carga inicial concluída com senha protegida por hash e valores em centavos inteiros.');
 }
 
 main()

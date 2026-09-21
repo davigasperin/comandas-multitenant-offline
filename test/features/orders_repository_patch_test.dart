@@ -33,7 +33,7 @@ class MockAdapter implements HttpClientAdapter {
 }
 
 void main() {
-  test('OrdersRepository sends PATCH /orders/:id/status', () async {
+  test('OrdersRepository envia PATCH para /orders/:id/status', () async {
     final dio = Dio(BaseOptions(baseUrl: 'http://localhost:3000/v1'));
     final adapter = MockAdapter();
     dio.httpClientAdapter = adapter;

@@ -18,7 +18,7 @@ void main() {
     repository = AuthRepository(dio, storage);
   });
 
-  test('login saves tokens and returns AuthResult on success (200)', () async {
+  test('login salva tokens e retorna AuthResult com sucesso (200)', () async {
     dio.httpClientAdapter = FakeHttpClientAdapter((options) async {
       return FakeHttpClientAdapter.json({
         'user': {'id': '1', 'name': 'Demo', 'email': 'demo@comandas.com'},
@@ -36,7 +36,7 @@ void main() {
     expect(savedAccess, 'fake_access');
   });
 
-  test('login throws ApiException with status 401 on unauthorized', () async {
+  test('login lança ApiException com status 401 quando não autorizado', () async {
     dio.httpClientAdapter = FakeHttpClientAdapter((options) async {
       return FakeHttpClientAdapter.json({'message': 'Unauthorized'}, 401);
     });
@@ -49,7 +49,7 @@ void main() {
     );
   });
 
-  test('logout clears secure storage keys', () async {
+  test('logout limpa as chaves do armazenamento seguro', () async {
     await storage.write(key: AppConstants.storageKeyAccessToken, value: 'token');
     await storage.write(key: AppConstants.storageKeySelectedTenantId, value: 'ten_1');
 

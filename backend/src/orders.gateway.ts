@@ -23,14 +23,14 @@ export class OrdersGateway implements OnGatewayConnection {
     try {
       const origin = client.handshake.headers?.origin as string | undefined;
       if (!corsOriginValidator(origin)) {
-        throw new Error('CORS origin rejected');
+        throw new Error('Origem CORS rejeitada');
       }
 
       const auth = client.handshake.auth ?? {};
       const token = auth.token;
       const tenantId = auth.tenantId;
       if (typeof token !== 'string' || typeof tenantId !== 'string' || !tenantId.trim()) {
-        throw new Error('Invalid handshake');
+        throw new Error('Handshake inválido');
       }
 
       const payload = await this.jwtService.verifyAsync<{ sub?: string; exp?: number }>(token);
@@ -41,13 +41,13 @@ export class OrdersGateway implements OnGatewayConnection {
         !Number.isFinite(payload.exp) ||
         payload.exp * 1000 <= Date.now()
       ) {
-        throw new Error('Invalid token claims');
+        throw new Error('Claims do token inválidas');
       }
 
       const access = await this.prisma.userTenant.findUnique({
         where: { userId_tenantId: { userId: payload.sub, tenantId } },
       });
-      if (!access) throw new Error('Tenant access denied');
+      if (!access) throw new Error('Acesso ao tenant negado');
 
       client.data.userId = payload.sub;
       client.data.tenantId = tenantId;

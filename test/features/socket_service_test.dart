@@ -3,7 +3,7 @@ import 'package:comandas_app/core/network/socket_service.dart';
 import '../mocks/fake_secure_storage.dart';
 
 void main() {
-  test('SocketService disconnects without credentials', () async {
+  test('SocketService desconecta sem credenciais', () async {
     final storage = FakeSecureStorage();
     final service = SocketService(storage, url: 'http://localhost:9999/orders');
 
@@ -19,7 +19,7 @@ void main() {
     await sub.cancel();
   });
 
-  test('SocketService dispose completes cleanly', () async {
+  test('SocketService é descartado corretamente', () async {
     final storage = FakeSecureStorage();
     await storage.write(key: 'access_token', value: 'tok');
     await storage.write(key: 'selected_tenant_id', value: 'ten_1');

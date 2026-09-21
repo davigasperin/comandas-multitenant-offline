@@ -53,7 +53,7 @@ class MutationQueueStorage {
         final map = jsonDecode(item) as Map<String, dynamic>;
         results.add(QueuedMutation.fromJson(map));
       } catch (_) {
-        // preserve corrupted representation if necessary or unparseable item
+        // Descarta o registro corrompido e mantém os demais registros legíveis da fila
       }
     }
     return results;

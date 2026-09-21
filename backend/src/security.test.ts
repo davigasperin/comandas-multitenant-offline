@@ -11,10 +11,10 @@ import { LoginDto, RefreshTokenDto } from './dto/auth.dto';
 import { CreateOrderDto, AddItemDto, UpdateOrderStatusDto } from './dto/orders.dto';
 
 async function runSecurityTests() {
-  console.log('Running Comprehensive Security P0 & Integration Test Suite...');
+  console.log('Iniciando suíte abrangente de segurança P0 e integração...');
 
   // 1. Password Hashing & Verification Tests
-  console.log('1. Testing Password Hashing & Verification...');
+  console.log('1. Testando hash e verificação de senhas...');
   const password = 'StrongPassword!123';
   const hashed = await hashPassword(password);
   assert.ok(hashed.startsWith('scrypt:'), 'Hash must start with scrypt: prefix');
@@ -32,21 +32,21 @@ async function runSecurityTests() {
   assert.strictEqual(plaintextMatch, false, 'Plaintext stored password must never verify as valid hash');
 
   // 2. JWT Config Validation Tests
-  console.log('2. Testing JWT Env Configuration...');
+  console.log('2. Testando configuração de ambiente do JWT...');
   assert.throws(() => validateJwtSecret(undefined), /JWT_SECRET/, 'Missing JWT_SECRET must throw');
-  assert.throws(() => validateJwtSecret('short-secret'), /at least 32 bytes/, 'Short JWT_SECRET must throw');
+  assert.throws(() => validateJwtSecret('short-secret'), /deve ter pelo menos 32 bytes/, 'Short JWT_SECRET must throw');
   const validSecret = '1234567890123456789012345678901234567890';
   assert.strictEqual(validateJwtSecret(validSecret), validSecret, 'Valid secret >= 32 bytes must pass');
 
   // 3. CORS Origin Validation Tests
-  console.log('3. Testing CORS Origin Validation...');
+  console.log('3. Testando validação de origem CORS...');
   const corsChecker = getCorsOriginValidator('http://localhost:3000,http://app.example.com');
   assert.strictEqual(corsChecker(undefined), true, 'Non-browser / mobile requests must be allowed');
   assert.strictEqual(corsChecker('http://localhost:3000'), true, 'Allowed origin must return true');
   assert.strictEqual(corsChecker('http://malicious-site.com'), false, 'Unauthorized origin must return false');
 
   // 4. DTO ValidationPipe Tests
-  console.log('4. Testing DTO Runtime Validation Pipe...');
+  console.log('4. Testando pipe de validação dos DTOs em tempo de execução...');
   const pipe = new ValidationPipe({
     whitelist: true,
     forbidNonWhitelisted: true,
@@ -65,7 +65,7 @@ async function runSecurityTests() {
   assert.strictEqual(rejectedExtraProps, true, 'ValidationPipe must reject extra properties in LoginDto');
 
   // 5. Database, Migration & AuthService Integration Tests (Isolated Test DB)
-  console.log('5. Testing Database Migration & AuthService Flow...');
+  console.log('5. Testando migração do banco e fluxo do serviço de autenticação...');
   const prisma = new PrismaService();
   await prisma.$connect();
   const runId = `${Date.now()}_${process.pid}`;
@@ -160,10 +160,10 @@ async function runSecurityTests() {
   assert.strictEqual(logoutRefreshFailed, true, 'Using a logged-out refresh token must throw Unauthorized');
 
   await prisma.$disconnect();
-  console.log('All Comprehensive Security P0 & Integration tests passed successfully!');
+  console.log('Todos os testes abrangentes de segurança P0 e integração foram concluídos com sucesso!');
 }
 
 runSecurityTests().catch((err) => {
-  console.error('Security & Integration Tests Failed:', err);
+  console.error('Falha nos testes de segurança e integração:', err);
   process.exit(1);
 });

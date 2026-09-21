@@ -38,7 +38,7 @@ void main() {
     ],
   );
 
-  testWidgets('KdsScreen displays 3 columns and orders in correct columns', (tester) async {
+  testWidgets('KdsScreen exibe três colunas e pedidos nas colunas corretas', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [

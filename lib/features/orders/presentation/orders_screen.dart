@@ -263,7 +263,7 @@ class _CreateOrderFabState extends ConsumerState<CreateOrderFab> {
 
       ref.invalidate(openOrdersProvider);
 
-      navigator.pop(); // fecha dialog
+      navigator.pop(); // fecha o diálogo
       navigator.push(
         MaterialPageRoute(
           builder: (_) => OrderDetailScreen(orderId: newOrder.id),

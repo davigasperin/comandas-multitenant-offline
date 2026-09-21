@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('OrdersScreen renders loading, empty and populated states', (tester) async {
+  testWidgets('OrdersScreen renderiza estados de carregamento, vazio e preenchido', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -36,7 +36,7 @@ void main() {
     expect(find.byIcon(Icons.assignment_turned_in_outlined), findsOneWidget);
   });
 
-  testWidgets('OrdersScreen renders list of orders with formatted total', (tester) async {
+  testWidgets('OrdersScreen renderiza lista de comandas com total formatado', (tester) async {
     final fakeOrder = Order(
       id: 'ord_1',
       tableLabel: 'Mesa 99',

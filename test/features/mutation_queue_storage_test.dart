@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('MutationQueueStorage enqueues, retrieves FIFO, and updates status', () async {
+  test('MutationQueueStorage enfileira, recupera em FIFO e atualiza o status', () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     final storage = MutationQueueStorage(prefs);

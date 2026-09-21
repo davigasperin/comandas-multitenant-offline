@@ -14,7 +14,7 @@ import '../mocks/fake_secure_storage.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('offline create, item, close, restart and replay use real order id',
+  test('criação, item, fechamento, reinício e reenvio offline usam o ID real da comanda',
       () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();

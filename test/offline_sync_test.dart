@@ -46,7 +46,7 @@ class _FakeErrorHandler extends ErrorInterceptorHandler {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('Scoped cache resolves on offline error', () async {
+  test('cache isolado responde durante erro de conexão', () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     final storage = MutationQueueStorage(prefs);

@@ -38,7 +38,7 @@ void main() {
     openedAt: DateTime.now(),
   );
 
-  testWidgets('OrderDetailScreen renders items, total and prints receipt', (tester) async {
+  testWidgets('OrderDetailScreen renderiza itens, total e imprime recibo', (tester) async {
     final mockReceiptService = MockReceiptService();
 
     await tester.pumpWidget(
@@ -69,7 +69,7 @@ void main() {
     expect(mockReceiptService.printCalled, isTrue);
   });
 
-  testWidgets('OrderDetailScreen hides Add Item button if status is closed', (tester) async {
+  testWidgets('OrderDetailScreen oculta o botão Adicionar item quando o status é closed', (tester) async {
     final closedOrder = Order(
       id: 'ord_1',
       tableLabel: 'Mesa 99',
@@ -93,9 +93,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('FECHADA'), findsOneWidget);
-    expect(find.text('Item'), findsNothing); // OutlinedButton hidden
+    expect(find.text('Item'), findsNothing); // OutlinedButton oculto
     
-    // The ElevatedButton says 'Fechada' and is disabled
+    // O ElevatedButton exibe 'Fechada' e está desabilitado
     final btnFinder = find.widgetWithText(ElevatedButton, 'Fechada');
     expect(btnFinder, findsOneWidget);
     final btn = tester.widget<ElevatedButton>(btnFinder);

@@ -33,7 +33,7 @@ class _KdsScreenState extends ConsumerState<KdsScreen> {
       });
     });
 
-    // 30s polling fallback + clock ticker for elapsed age
+    // Fallback de polling a cada 30s + relógio para cálculo do tempo de espera
     _pollingTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       ref.invalidate(openOrdersProvider);
     });
@@ -84,10 +84,10 @@ class _KdsScreenState extends ConsumerState<KdsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Listen to real-time events and invalidate
+    // Escuta eventos em tempo real do socket para invalidar o estado
     ref.listen(socketServiceProvider, (previous, next) {});
 
-    // Also listen to socket connection state stream
+    // Escuta o fluxo de conexão do WebSocket
     final connectionStateAsync = ref.watch(socketConnectionStateProvider);
     final isConnected =
         connectionStateAsync.valueOrNull == SocketConnectionState.connected;
@@ -143,7 +143,7 @@ class _KdsScreenState extends ConsumerState<KdsScreen> {
           ),
         ),
         data: (orders) {
-          // Filter out closed/canceled
+          // Filtra pedidos fechados ou cancelados
           final activeOrders = orders
               .where((o) =>
                   o.status != OrderStatus.closed &&

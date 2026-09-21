@@ -4,10 +4,10 @@ import 'package:google_fonts/google_fonts.dart';
 class AppTheme {
   AppTheme._();
 
-  // Cores Baseadas no Design System "Real-Time / Operations" (Teal/Amber)
+  // Cores baseadas no sistema de design de operações em tempo real (verde-azulado/âmbar)
   static const Color primary = Color(0xFF0D9488); // Teal
   static const Color onPrimary = Color(0xFFFFFFFF);
-  static const Color secondary = Color(0xFF0F766E); // Teal 700 para contraste WCAG AA
+  static const Color secondary = Color(0xFF0F766E); // Verde-azulado 700 para contraste WCAG AA
   static const Color accent = Color(0xFFD97706); // Amber
   static const Color background = Color(0xFFF0FDFA);
   static const Color danger = Color(0xFFDC2626);
@@ -36,7 +36,7 @@ class AppTheme {
       appBarTheme: base.appBarTheme.copyWith(
         backgroundColor: primary,
         foregroundColor: onPrimary,
-        elevation: 2, // Maior elevação para separação de block
+        elevation: 2, // Maior elevação para separação dos blocos
         shadowColor: Colors.black26,
         centerTitle: false,
       ),
@@ -45,10 +45,10 @@ class AppTheme {
           backgroundColor: primary,
           foregroundColor: onPrimary,
           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-          minimumSize: const Size(88, 48), // Touch target mínimo
+          minimumSize: const Size(88, 48), // Área mínima de toque
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8), // Mais sharp (block-based)
+            borderRadius: BorderRadius.circular(8), // Cantos mais definidos, baseados em blocos
           ),
         ),
       ),

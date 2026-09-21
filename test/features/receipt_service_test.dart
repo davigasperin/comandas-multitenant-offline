@@ -54,16 +54,16 @@ void main() {
     ],
   );
 
-  test('generateReceiptPdf generates valid non-empty 80mm PDF bytes', () async {
+  test('generateReceiptPdf gera bytes PDF válidos e não vazios de 80 mm', () async {
     final pdfBytes = await receiptService.generateReceiptPdf(testOrder);
 
     expect(pdfBytes, isNotNull);
     expect(pdfBytes.isNotEmpty, isTrue);
-    // PDF Magic bytes %PDF
+    // Bytes iniciais do PDF: %PDF
     expect(pdfBytes.sublist(0, 4), equals([0x25, 0x50, 0x44, 0x46]));
   });
 
-  test('generateReceiptPdf handles empty order items without failure', () async {
+  test('generateReceiptPdf trata itens vazios da comanda sem falhar', () async {
     final emptyOrder = Order(
       id: 'ord_empty',
       tableLabel: 'Comanda 99',

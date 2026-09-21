@@ -18,7 +18,7 @@ class MockAuthRepository extends AuthRepository {
   @override
   Future<AuthResult> login({required String email, required String password}) async {
     if (shouldFail) {
-      throw const ApiException('Invalid credentials', statusCode: 401);
+      throw const ApiException('Credenciais inválidas', statusCode: 401);
     }
     return const AuthResult(
       user: AuthUser(id: '1', name: 'Test', email: 'test@test.com'),
@@ -29,7 +29,7 @@ class MockAuthRepository extends AuthRepository {
 }
 
 void main() {
-  testWidgets('LoginScreen shows validation errors for empty fields', (tester) async {
+  testWidgets('LoginScreen mostra erros de validação para campos vazios', (tester) async {
     await tester.pumpWidget(
       const ProviderScope(
         child: MaterialApp(home: LoginScreen()),
@@ -43,7 +43,7 @@ void main() {
     expect(find.text('Senha muito curta'), findsOneWidget);
   });
 
-  testWidgets('LoginScreen displays error SnackBar on API failure', (tester) async {
+  testWidgets('LoginScreen mostra SnackBar de erro em falha da API', (tester) async {
     final mockRepo = MockAuthRepository()..shouldFail = true;
 
     await tester.pumpWidget(
@@ -58,6 +58,6 @@ void main() {
     await tester.tap(find.text('Entrar'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Invalid credentials'), findsOneWidget);
+    expect(find.text('Credenciais inválidas'), findsOneWidget);
   });
 }

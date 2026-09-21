@@ -1,13 +1,13 @@
 export function validateJwtSecret(secret: string | undefined): string {
-  if (!secret) throw new Error('JWT_SECRET is required');
-  if (Buffer.byteLength(secret, 'utf8') < 32) throw new Error('JWT_SECRET must be at least 32 bytes');
+  if (!secret) throw new Error('JWT_SECRET é obrigatório');
+  if (Buffer.byteLength(secret, 'utf8') < 32) throw new Error('JWT_SECRET deve ter pelo menos 32 bytes');
   return secret;
 }
 
 export function parseCorsOrigins(value: string | undefined): ReadonlySet<string> {
-  if (!value?.trim()) throw new Error('CORS_ORIGINS is required');
+  if (!value?.trim()) throw new Error('CORS_ORIGINS é obrigatório');
   const origins = value.split(',').map((origin) => origin.trim()).filter(Boolean);
-  if (!origins.length || origins.includes('*')) throw new Error('CORS_ORIGINS must be a restricted comma-separated allowlist');
+  if (!origins.length || origins.includes('*')) throw new Error('CORS_ORIGINS deve ser uma lista restrita separada por vírgulas');
   return new Set(origins);
 }
 
