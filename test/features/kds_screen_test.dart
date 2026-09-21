@@ -14,7 +14,7 @@ void main() {
     status: OrderStatus.open,
     openedAt: DateTime.now().subtract(const Duration(minutes: 5)),
     items: const [
-      OrderItem(id: 'i1', productName: 'Pizza', quantity: 1, unitPrice: 40.0),
+      OrderItem(id: 'i1', productName: 'Pizza', quantity: 1, unitPriceCents: 4000),
     ],
   );
 
@@ -24,7 +24,7 @@ void main() {
     status: OrderStatus.sentToKitchen,
     openedAt: DateTime.now().subtract(const Duration(minutes: 15)),
     items: const [
-      OrderItem(id: 'i2', productName: 'Hambúrguer', quantity: 2, unitPrice: 25.0),
+      OrderItem(id: 'i2', productName: 'Hambúrguer', quantity: 2, unitPriceCents: 2500),
     ],
   );
 
@@ -34,7 +34,7 @@ void main() {
     status: OrderStatus.delivered,
     openedAt: DateTime.now().subtract(const Duration(minutes: 2)),
     items: const [
-      OrderItem(id: 'i3', productName: 'Cerveja', quantity: 3, unitPrice: 10.0),
+      OrderItem(id: 'i3', productName: 'Cerveja', quantity: 3, unitPriceCents: 1000),
     ],
   );
 

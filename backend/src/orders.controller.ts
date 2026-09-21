@@ -1,26 +1,27 @@
 import {
+  BadRequestException,
   Body,
+  ConflictException,
   Controller,
   Get,
+  NotFoundException,
   Param,
   Patch,
   Post,
   Query,
   Request,
   UseGuards,
-  NotFoundException,
-  BadRequestException,
-  ConflictException,
 } from '@nestjs/common';
-import * as crypto from 'crypto';
+import * as crypto from 'node:crypto';
 import { AuthGuard } from './auth.guard';
-import { TenantGuard } from './tenant.guard';
-import { PrismaService } from './prisma.service';
+import { AddItemDto, CreateOrderDto, QueryOrdersDto, UpdateOrderStatusDto } from './dto/orders.dto';
 import { OrdersGateway } from './orders.gateway';
-import { AddItemDto, CreateOrderDto, OrdersQueryDto, UpdateOrderStatusDto } from './dto/orders.dto';
+import { PrismaService } from './prisma.service';
+import { TenantGuard } from './tenant.guard';
 
 interface RequestContext {
   tenantId: string;
+  user?: { sub: string };
   headers: Record<string, string | string[] | undefined>;
 }
 
@@ -47,23 +48,26 @@ export class OrdersController {
       where: { tenantId_key: { tenantId, key } },
     });
     if (!existing) return null;
+
     const currentHash = computePayloadHash(payload);
     if (existing.requestHash && existing.requestHash !== currentHash) {
-      throw new ConflictException('Idempotency key reused with different payload');
+      throw new ConflictException('Chave de idempotência já utilizada com payload diferente');
     }
     return JSON.parse(existing.response);
   }
 
   private async saveIdempotency(tx: any, tenantId: string, key: string | undefined, payload: unknown, response: unknown) {
     if (!key) return;
-    await tx.idempotencyKey.create({
-      data: {
-        tenantId,
-        key,
-        requestHash: computePayloadHash(payload),
-        response: JSON.stringify(response),
-      },
-    }).catch(() => {});
+    await tx.idempotencyKey
+      .create({
+        data: {
+          tenantId,
+          key,
+          requestHash: computePayloadHash(payload),
+          response: JSON.stringify(response),
+        },
+      })
+      .catch(() => {});
   }
 
   @Get('products')
@@ -76,7 +80,7 @@ export class OrdersController {
   }
 
   @Get()
-  async getOrders(@Request() req: RequestContext, @Query() query: OrdersQueryDto) {
+  async getOrders(@Request() req: RequestContext, @Query() query?: QueryOrdersDto) {
     let statuses: string[] | undefined;
     if (typeof query?.status === 'string' && query.status.trim()) {
       statuses = query.status.split(',').map((s) => s.trim()).filter(Boolean);
@@ -87,7 +91,7 @@ export class OrdersController {
         tenantId: req.tenantId,
         ...(statuses && statuses.length ? { status: { in: statuses } } : {}),
       },
-      include: { items: true },
+      include: { items: true, history: { orderBy: { changed_at: 'asc' } } },
       orderBy: { opened_at: 'desc' },
     });
     return { data: orders };
@@ -102,6 +106,7 @@ export class OrdersController {
     if (cached) return cached;
 
     const tableLabel = body.table_label.trim();
+    const userId = req.user?.sub;
 
     const created = await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.create({
@@ -109,8 +114,16 @@ export class OrdersController {
           tenantId: req.tenantId,
           table_label: tableLabel,
           status: 'open',
+          version: 1,
+          history: {
+            create: {
+              from_status: null,
+              to_status: 'open',
+              changed_by: userId,
+            },
+          },
         },
-        include: { items: true },
+        include: { items: true, history: true },
       });
 
       await this.saveIdempotency(tx, req.tenantId, key, body, order);
@@ -125,7 +138,7 @@ export class OrdersController {
   async getOrderById(@Request() req: RequestContext, @Param('id') id: string) {
     const order = await this.prisma.order.findFirst({
       where: { id, tenantId: req.tenantId },
-      include: { items: true },
+      include: { items: true, history: { orderBy: { changed_at: 'asc' } } },
     });
     if (!order) throw new NotFoundException('Comanda não encontrada');
     return order;
@@ -144,6 +157,7 @@ export class OrdersController {
     if (cached) return cached;
 
     const nextStatus = body.status;
+    const userId = req.user?.sub;
 
     const allowedPrevious = Object.entries(VALID_TRANSITIONS).find(([, target]) => target === nextStatus)?.[0];
     if (!allowedPrevious) {
@@ -151,14 +165,21 @@ export class OrdersController {
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      const whereClause: any = {
+        id,
+        tenantId: req.tenantId,
+        status: allowedPrevious,
+      };
+
+      if (body.expected_version !== undefined) {
+        whereClause.version = body.expected_version;
+      }
+
       const result = await tx.order.updateMany({
-        where: {
-          id,
-          tenantId: req.tenantId,
-          status: allowedPrevious,
-        },
+        where: whereClause,
         data: {
           status: nextStatus,
+          version: { increment: 1 },
         },
       });
 
@@ -170,15 +191,27 @@ export class OrdersController {
         if (existing.status === nextStatus) {
           return tx.order.findUniqueOrThrow({
             where: { id },
-            include: { items: true },
+            include: { items: true, history: { orderBy: { changed_at: 'asc' } } },
           });
+        }
+        if (body.expected_version !== undefined && existing.version !== body.expected_version) {
+          throw new ConflictException(`Conflito de concorrência: versão esperada ${body.expected_version}, versão atual ${existing.version}`);
         }
         throw new ConflictException(`Transição de ${existing.status} para ${nextStatus} não permitida`);
       }
 
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId: id,
+          from_status: allowedPrevious,
+          to_status: nextStatus,
+          changed_by: userId,
+        },
+      });
+
       const fresh = await tx.order.findUniqueOrThrow({
         where: { id },
-        include: { items: true },
+        include: { items: true, history: { orderBy: { changed_at: 'asc' } } },
       });
 
       await this.saveIdempotency(tx, req.tenantId, key, body, fresh);
@@ -206,9 +239,8 @@ export class OrdersController {
     }
 
     const rawQuantity = body.quantity;
-
     let productName = typeof body.product_name === 'string' ? body.product_name.trim() : '';
-    let unitPrice = 20.0;
+    let unitPriceCents = body.unit_price_cents ?? 2000;
 
     if (typeof body.product_id === 'string' && body.product_id.trim()) {
       const product = await this.prisma.product.findFirst({
@@ -216,7 +248,7 @@ export class OrdersController {
       });
       if (!product) throw new NotFoundException('Produto não encontrado');
       productName = product.name;
-      unitPrice = product.price;
+      unitPriceCents = product.price_cents;
     }
 
     if (!productName) {
@@ -231,14 +263,19 @@ export class OrdersController {
           orderId: id,
           product_name: productName,
           quantity: rawQuantity,
-          unit_price: unitPrice,
+          unit_price_cents: unitPriceCents,
           notes,
         },
       });
 
+      await tx.order.update({
+        where: { id },
+        data: { version: { increment: 1 } },
+      });
+
       const fresh = await tx.order.findUniqueOrThrow({
         where: { id },
-        include: { items: true },
+        include: { items: true, history: { orderBy: { changed_at: 'asc' } } },
       });
 
       await this.saveIdempotency(tx, req.tenantId, key, body, fresh);
@@ -259,7 +296,7 @@ export class OrdersController {
 
     const order = await this.prisma.order.findFirst({
       where: { id, tenantId: req.tenantId },
-      include: { items: true },
+      include: { items: true, history: { orderBy: { changed_at: 'asc' } } },
     });
     if (!order) throw new NotFoundException('Comanda não encontrada');
     if (order.status === 'closed') return order;
@@ -267,11 +304,23 @@ export class OrdersController {
       throw new BadRequestException('Comanda cancelada não pode ser fechada');
     }
 
+    const userId = req.user?.sub;
+
     const updated = await this.prisma.$transaction(async (tx) => {
       const closed = await tx.order.update({
         where: { id },
-        data: { status: 'closed' },
-        include: { items: true },
+        data: {
+          status: 'closed',
+          version: { increment: 1 },
+          history: {
+            create: {
+              from_status: order.status,
+              to_status: 'closed',
+              changed_by: userId,
+            },
+          },
+        },
+        include: { items: true, history: { orderBy: { changed_at: 'asc' } } },
       });
 
       await this.saveIdempotency(tx, req.tenantId, key, {}, closed);

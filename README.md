@@ -99,9 +99,11 @@ Falhas transitórias de rede podem induzir cliques duplos do operador ou reenvio
 - Compatível imediatamente com impressoras de rede (TCP/IP), Bluetooth, USB e emuladores de terminal de mesa.
 - Cabeçalho dinâmico com identificação visual do estabelecimento e formatação tabular alinhada.
 
-### 6. 💎 Tipagem Estrita e Clean Architecture
-- **Backend NestJS:** TypeScript configurado com `strictNullChecks: true`, `noImplicitAny: true` e persistência via **Prisma ORM**, substituindo stores voláteis em memória por SQLite com migrações versionadas.
-- **Frontend Flutter:** Camadas estritamente segregadas em `core/` (infraestrutura, tema, rede, interceptors) e `features/` (auth, tenant, dashboard, orders), com modelos estendendo `Equatable` e injeção de dependências declarativa via `Riverpod`.
+### 6. 💎 Integridade Financeira, Concorrência Otimista & Clean Architecture
+- **Armazenamento Financeiro sem Ponto Flutuante:** Preços de produtos e itens são armazenados estritamente como centavos inteiros (`price_cents`, `unit_price_cents`), eliminando erros de arredondamento de ponto flutuante (`IEEE 754`).
+- **Concorrência Otimista & Auditoria:** Comandas possuem controle de versão monotônico (`version: { increment: 1 }`), rejeitando atualizações conflitantes com `HTTP 409 Conflict` e persistindo histórico imutável (`OrderStatusHistory`) com autor e data/hora de cada transição.
+- **Backend NestJS & Índices de Alta Performance:** Prisma ORM com SQLite, índices compostos em `[tenantId, status]` e `[tenantId, opened_at]` para consultas instantâneas no salão.
+- **Frontend Flutter:** Modelos reativos e imutáveis com `Equatable` expondo getters monetários seguros (`subtotalCents`, `totalCents`, `price`, `total`) e injeção declarativa via Riverpod.
 
 ---
 

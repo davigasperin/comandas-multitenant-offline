@@ -32,7 +32,7 @@ void main() {
         id: 'it_1',
         productName: 'Cerveja',
         quantity: 2,
-        unitPrice: 15.0,
+        unitPriceCents: 1500,
       )
     ],
     openedAt: DateTime.now(),
@@ -46,7 +46,7 @@ void main() {
         overrides: [
           orderDetailProvider('ord_1').overrideWith((ref) => Future.value(fakeOrder)),
           productsProvider.overrideWith((ref) => Future.value([
-            const Product(id: 'p1', name: 'Suco', price: 10.0),
+            const Product(id: 'p1', name: 'Suco', priceCents: 1000),
           ])),
           receiptServiceProvider.overrideWithValue(mockReceiptService),
         ],

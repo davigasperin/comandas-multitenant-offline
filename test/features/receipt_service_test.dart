@@ -42,14 +42,14 @@ void main() {
         id: 'it_1',
         productName: 'Chopp Pilsen',
         quantity: 3,
-        unitPrice: 12.0,
+        unitPriceCents: 1200,
         notes: 'Caneca congelada',
       ),
       OrderItem(
         id: 'it_2',
         productName: 'Porção de Pastel',
         quantity: 1,
-        unitPrice: 28.0,
+        unitPriceCents: 2800,
       ),
     ],
   );

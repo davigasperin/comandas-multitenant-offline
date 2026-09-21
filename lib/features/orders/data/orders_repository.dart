@@ -171,13 +171,19 @@ class OrdersRepository {
     }
   }
 
-  Future<bool> updateOrderStatus(
-      {required String orderId, required String status}) async {
+  Future<bool> updateOrderStatus({
+    required String orderId,
+    required String status,
+    int? expectedVersion,
+  }) async {
     try {
       final idempKey = 'idemp_status_${DateTime.now().microsecondsSinceEpoch}';
       final response = await _dio.patch(
         '/orders/$orderId/status',
-        data: {'status': status},
+        data: {
+          'status': status,
+          if (expectedVersion != null) 'expected_version': expectedVersion,
+        },
         options: Options(
           headers: {'X-Idempotency-Key': idempKey},
           extra: orderId.startsWith('temp_')

@@ -1,45 +1,47 @@
-import { IsIn, IsInt, IsOptional, IsString, Length, Matches, Max, Min } from 'class-validator';
-
-export class EmptyDto {}
+import { IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateOrderDto {
   @IsString()
-  @Length(1, 120)
-  @Matches(/\S/)
+  @IsNotEmpty({ message: 'table_label é obrigatório' })
   table_label!: string;
 }
 
 export class AddItemDto {
   @IsOptional()
   @IsString()
-  @Length(1, 128)
   product_id?: string;
 
   @IsOptional()
   @IsString()
-  @Length(1, 200)
   product_name?: string;
 
-  @IsInt()
-  @Min(1)
-  @Max(10000)
+  @IsInt({ message: 'quantity deve ser um número inteiro' })
+  @Min(1, { message: 'quantity deve ser maior que zero' })
   quantity!: number;
 
   @IsOptional()
+  @IsInt({ message: 'unit_price_cents deve ser um número inteiro em centavos' })
+  @Min(0, { message: 'unit_price_cents não pode ser negativo' })
+  unit_price_cents?: number;
+
+  @IsOptional()
   @IsString()
-  @Length(0, 2000)
   notes?: string;
 }
 
 export class UpdateOrderStatusDto {
-  @IsIn(['sentToKitchen', 'delivered'])
+  @IsString()
+  @IsNotEmpty({ message: 'status é obrigatório' })
   status!: string;
+
+  @IsOptional()
+  @IsInt({ message: 'expected_version deve ser um número inteiro' })
+  @Min(1)
+  expected_version?: number;
 }
 
-export class OrdersQueryDto {
+export class QueryOrdersDto {
   @IsOptional()
   @IsString()
-  @Length(0, 200)
-  @Matches(/^\s*(?:(?:open|sentToKitchen|delivered|closed|canceled)\s*(?:,\s*(?:open|sentToKitchen|delivered|closed|canceled)\s*)*)?$/)
   status?: string;
 }

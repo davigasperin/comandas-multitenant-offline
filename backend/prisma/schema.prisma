@@ -8,13 +8,13 @@ datasource db {
 }
 
 model User {
-  id            String         @id @default(cuid())
-  name          String
-  email         String         @unique
-  password      String
-  tenants       UserTenant[]
+  id        String       @id @default(cuid())
+  name      String
+  email     String       @unique
+  password  String
+  tenants   UserTenant[]
   refreshTokens RefreshToken[]
-  createdAt     DateTime       @default(now())
+  createdAt DateTime     @default(now())
 }
 
 model Tenant {
@@ -37,35 +37,58 @@ model UserTenant {
   tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@id([userId, tenantId])
+  @@index([tenantId])
 }
 
 model Product {
-  id        String   @id @default(cuid())
-  tenantId  String
-  name      String
-  price     Float
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  price_cents Int
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
 }
 
 model Order {
-  id          String      @id @default(cuid())
+  id          String               @id @default(cuid())
   tenantId    String
   table_label String
-  status      String      @default("open")
-  opened_at   DateTime    @default(now())
-  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  status      String               @default("open")
+  version     Int                  @default(1)
+  opened_at   DateTime             @default(now())
+  updated_at  DateTime             @default(now()) @updatedAt
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   items       OrderItem[]
+  history     OrderStatusHistory[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, opened_at])
 }
 
 model OrderItem {
-  id           String  @id @default(cuid())
-  orderId      String
-  product_name String
-  quantity     Int
-  unit_price   Float
-  notes        String?
-  order        Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id               String  @id @default(cuid())
+  orderId          String
+  product_name     String
+  quantity         Int
+  unit_price_cents Int
+  notes            String?
+  order            Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+model OrderStatusHistory {
+  id             String   @id @default(cuid())
+  orderId        String
+  from_status    String?
+  to_status      String
+  changed_by     String?
+  changed_at     DateTime @default(now())
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
 }
 
 model IdempotencyKey {

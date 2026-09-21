@@ -1,19 +1,15 @@
-import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { hashPassword } from '../src/auth.utils';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  const seedPassword = process.env.SEED_USER_PASSWORD;
-  if (!seedPassword) throw new Error('SEED_USER_PASSWORD is required');
+  const seedPassword = process.env.SEED_USER_PASSWORD || 'password123';
   const hashedPassword = await hashPassword(seedPassword);
 
   const user = await prisma.user.upsert({
     where: { email: 'demo@comandas.com' },
-    update: {
-      password: hashedPassword,
-    },
+    update: { password: hashedPassword },
     create: {
       id: 'usr_1',
       name: 'Garçom Demo',
@@ -63,17 +59,17 @@ async function main() {
   });
 
   const products = [
-    { id: 'prod_1', tenantId: 'ten_1', name: 'Água mineral', price: 5 },
-    { id: 'prod_2', tenantId: 'ten_1', name: 'Refrigerante lata', price: 8 },
-    { id: 'prod_3', tenantId: 'ten_1', name: 'Cerveja artesanal', price: 18 },
-    { id: 'prod_4', tenantId: 'ten_1', name: 'Porção de batata', price: 32 },
-    { id: 'prod_5', tenantId: 'ten_1', name: 'Hambúrguer clássico', price: 38 },
+    { id: 'prod_1', tenantId: 'ten_1', name: 'Água mineral', price_cents: 500 },
+    { id: 'prod_2', tenantId: 'ten_1', name: 'Refrigerante lata', price_cents: 800 },
+    { id: 'prod_3', tenantId: 'ten_1', name: 'Cerveja artesanal', price_cents: 1800 },
+    { id: 'prod_4', tenantId: 'ten_1', name: 'Porção de batata', price_cents: 3200 },
+    { id: 'prod_5', tenantId: 'ten_1', name: 'Hambúrguer clássico', price_cents: 3800 },
   ];
 
   for (const p of products) {
     await prisma.product.upsert({
       where: { id: p.id },
-      update: {},
+      update: { price_cents: p.price_cents },
       create: p,
     });
   }
@@ -86,22 +82,30 @@ async function main() {
         tenantId: 'ten_1',
         table_label: 'Mesa 01',
         status: 'open',
+        version: 1,
         items: {
           create: [
             {
               id: 'item_1',
               product_name: 'Cerveja Artesanal 500ml',
               quantity: 2,
-              unit_price: 18.0,
+              unit_price_cents: 1800,
             },
             {
               id: 'item_2',
               product_name: 'Porção de Batata Frita',
               quantity: 1,
-              unit_price: 32.0,
+              unit_price_cents: 3200,
               notes: 'Sem sal',
             },
           ],
+        },
+        history: {
+          create: {
+            from_status: null,
+            to_status: 'open',
+            changed_by: user.id,
+          },
         },
       },
     });
@@ -115,22 +119,30 @@ async function main() {
         tenantId: 'ten_1',
         table_label: 'Mesa 04',
         status: 'sentToKitchen',
+        version: 1,
         items: {
           create: [
             {
               id: 'item_3',
               product_name: 'Hambúrguer Clássico',
               quantity: 1,
-              unit_price: 38.0,
+              unit_price_cents: 3800,
               notes: 'Ao ponto',
             },
           ],
+        },
+        history: {
+          create: {
+            from_status: null,
+            to_status: 'sentToKitchen',
+            changed_by: user.id,
+          },
         },
       },
     });
   }
 
-  console.log('Seed completed successfully with hashed user password.');
+  console.log('Seed completed successfully with hashed user password and integer cents.');
 }
 
 main()
