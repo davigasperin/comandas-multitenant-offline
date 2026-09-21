@@ -130,9 +130,12 @@ class SyncService {
             await queue.remove(mutation.id);
             syncedCount++;
           } else if (statusCode == 409) {
-            // Remove a operação ao receber HTTP 409; comportamento requer revisão
-            await queue.remove(mutation.id);
-            syncedCount++;
+            await queue.updateStatus(
+              mutation.id,
+              MutationStatus.failed,
+              lastError: 'Conflito HTTP 409: revisão manual necessária.',
+              retryCount: mutation.retryCount + 1,
+            );
           } else {
             final nextRetry = mutation.retryCount + 1;
             if (nextRetry >= 5) {
@@ -166,9 +169,12 @@ class SyncService {
               retryCount: mutation.retryCount + 1,
             );
           } else if (statusCode == 409) {
-            // Idempotência já processada no servidor
-            await queue.remove(mutation.id);
-            syncedCount++;
+            await queue.updateStatus(
+              mutation.id,
+              MutationStatus.failed,
+              lastError: 'Conflito HTTP 409: revisão manual necessária.',
+              retryCount: mutation.retryCount + 1,
+            );
           } else {
             // Falha transitória de rede -> recua com backoff exponencial
             final nextRetry = mutation.retryCount + 1;
