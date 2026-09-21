@@ -109,8 +109,19 @@ class OrdersRepository {
 
   Future<void> closeOrder(String orderId) async {
     try {
-      await _dio.post(
-        '/orders/$orderId/close',
+      await _dio.post('/orders/$orderId/close',
+          options: Options(headers: {'X-Idempotency-Key': DateTime.now().toIso8601String()}));
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 202) return;
+      _rethrowAsApiException(e);
+    }
+  }
+
+  Future<void> updateOrderStatus({required String orderId, required String status}) async {
+    try {
+      await _dio.patch(
+        '/orders/$orderId/status',
+        data: {'status': status},
         options: Options(headers: {'X-Idempotency-Key': DateTime.now().toIso8601String()}),
       );
     } on DioException catch (e) {

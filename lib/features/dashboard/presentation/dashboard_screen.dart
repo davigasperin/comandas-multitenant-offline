@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/providers.dart';
 import '../../auth/presentation/login_screen.dart';
 import '../../orders/presentation/orders_screen.dart';
+import '../../orders/presentation/kds_screen.dart';
 import '../../tenant/presentation/tenant_switch_screen.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -41,6 +42,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     if (confirmed != true || !mounted) return;
 
+    ref.read(socketServiceProvider).disconnect();
     await ref.read(authRepositoryProvider).logout();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
@@ -102,8 +104,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ),
               onPressed: _isSyncing ? null : () => _handleSync(context),
             ),
-            IconButton(
-              tooltip: 'Trocar empresa',
+             IconButton(
+               tooltip: 'KDS cozinha',
+               icon: const Icon(Icons.view_kanban_outlined),
+               onPressed: () => Navigator.of(context).push(
+                 MaterialPageRoute(builder: (_) => const KdsScreen()),
+               ),
+             ),
+             IconButton(
+               tooltip: 'Trocar empresa',
               icon: const Icon(Icons.swap_horiz),
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const TenantSwitchScreen()),

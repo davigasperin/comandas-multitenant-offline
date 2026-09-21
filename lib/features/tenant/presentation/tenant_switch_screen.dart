@@ -20,6 +20,7 @@ class TenantSwitchScreen extends ConsumerWidget {
     WidgetRef ref,
     Tenant tenant,
   ) async {
+    ref.read(socketServiceProvider).disconnect();
     await ref.read(tenantRepositoryProvider).selectTenant(tenant);
     if (!context.mounted) return;
     Navigator.of(context).pushReplacement(
