@@ -1,0 +1,78 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String       @id @default(cuid())
+  name      String
+  email     String       @unique
+  password  String
+  tenants   UserTenant[]
+  createdAt DateTime     @default(now())
+}
+
+model Tenant {
+  id          String       @id @default(cuid())
+  name        String
+  role        String
+  logo_url    String?
+  users       UserTenant[]
+  products    Product[]
+  orders      Order[]
+  idempotency IdempotencyKey[]
+  createdAt   DateTime     @default(now())
+}
+
+model UserTenant {
+  userId    String
+  tenantId  String
+  role      String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([userId, tenantId])
+}
+
+model Product {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  price     Float
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Order {
+  id          String      @id @default(cuid())
+  tenantId    String
+  table_label String
+  status      String      @default("open")
+  opened_at   DateTime    @default(now())
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items       OrderItem[]
+}
+
+model OrderItem {
+  id           String  @id @default(cuid())
+  orderId      String
+  product_name String
+  quantity     Int
+  unit_price   Float
+  notes        String?
+  order        Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model IdempotencyKey {
+  key       String
+  tenantId  String
+  response  String
+  createdAt DateTime @default(now())
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, key])
+}
