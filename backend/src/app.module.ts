@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { AppController } from './app.controller';
 import { OrdersController } from './orders.controller';
+import { OrdersGateway } from './orders.gateway';
 import { PrismaModule } from './prisma.module';
 
 @Module({
@@ -14,5 +15,6 @@ import { PrismaModule } from './prisma.module';
     }),
   ],
   controllers: [AppController, OrdersController],
+  providers: [OrdersGateway],
 })
 export class AppModule {}
