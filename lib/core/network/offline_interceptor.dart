@@ -15,13 +15,20 @@ class OfflineInterceptor extends Interceptor {
   String? _cacheKey(RequestOptions request) {
     final owner = request.extra['owner'];
     final tenant = request.headers['X-Tenant-Id'];
-    if (owner == null || tenant == null || request.method != 'GET' ||
+    if (owner == null ||
+        tenant == null ||
+        request.method != 'GET' ||
         !RegExp(r'^/orders(?:/[a-zA-Z0-9_-]+)?$').hasMatch(request.path)) {
       return null;
     }
     final query = request.queryParameters.entries.toList()
       ..sort((a, b) => a.key.compareTo(b.key));
-    return '$cachePrefix${jsonEncode([owner, tenant, request.path, query.map((e) => [e.key, e.value]).toList()])}';
+    return '$cachePrefix${jsonEncode([
+          owner,
+          tenant,
+          request.path,
+          query.map((e) => [e.key, e.value]).toList()
+        ])}';
   }
 
   bool _isTransient(DioExceptionType type) => const [
@@ -32,7 +39,8 @@ class OfflineInterceptor extends Interceptor {
       ].contains(type);
 
   @override
-  Future<void> onResponse(Response response, ResponseInterceptorHandler handler) async {
+  Future<void> onResponse(
+      Response response, ResponseInterceptorHandler handler) async {
     final key = _cacheKey(response.requestOptions);
     if (key != null && response.statusCode == 200) {
       await prefs.setString(key, jsonEncode(response.data));
@@ -41,31 +49,49 @@ class OfflineInterceptor extends Interceptor {
   }
 
   @override
-  Future<void> onError(DioException err, ErrorInterceptorHandler handler) async {
+  Future<void> onError(
+      DioException err, ErrorInterceptorHandler handler) async {
     final request = err.requestOptions;
     if (request.extra['skipOfflineQueue'] == true) {
       handler.next(err);
       return;
     }
-    if (_isTransient(err.type) && const ['POST', 'PATCH', 'PUT', 'DELETE'].contains(request.method)) {
+    if (_isTransient(err.type) &&
+        const ['POST', 'PATCH', 'PUT', 'DELETE'].contains(request.method)) {
       final tenantId = request.headers['X-Tenant-Id']?.toString();
       final userId = request.extra['owner']?.toString();
-      final idempotencyKey = request.headers['X-Idempotency-Key']?.toString();
-      if (tenantId != null && userId != null && idempotencyKey != null) {
+      final idempotencyKey = request.headers['X-Idempotency-Key']?.toString() ??
+          'idemp_${DateTime.now().microsecondsSinceEpoch}';
+      if (tenantId != null && userId != null) {
+        final tempOrderId = request.extra['tempOrderId']?.toString();
+        final dependsOnTempOrderId =
+            request.extra['dependsOnTempOrderId']?.toString();
+
         await queue.enqueue(QueuedMutation(
           id: '${DateTime.now().microsecondsSinceEpoch}_$idempotencyKey',
           idempotencyKey: idempotencyKey,
           method: request.method,
           path: request.path,
-          body: request.data is Map ? Map<String, dynamic>.from(request.data as Map) : null,
+          body: request.data is Map
+              ? Map<String, dynamic>.from(request.data as Map)
+              : null,
           tenantId: tenantId,
           userId: userId,
           createdAt: DateTime.now(),
+          tempOrderId: tempOrderId,
+          dependsOnTempOrderId: dependsOnTempOrderId,
         ));
         handler.resolve(Response(
           requestOptions: request,
           statusCode: 202,
-          data: <String, dynamic>{'queued': true},
+          data: tempOrderId != null
+              ? {
+                  'id': tempOrderId,
+                  'table_label': request.path.contains('items')
+                      ? 'Item'
+                      : (request.data?['table_label'] ?? 'Mesa')
+                }
+              : {'queued': true},
           extra: {'offline': true, 'queued': true},
         ));
         return;
@@ -76,7 +102,11 @@ class OfflineInterceptor extends Interceptor {
     if (key != null && _isTransient(err.type)) {
       final cached = prefs.getString(key);
       if (cached != null) {
-        handler.resolve(Response(requestOptions: request, statusCode: 200, data: jsonDecode(cached), extra: {'offline': true}));
+        handler.resolve(Response(
+            requestOptions: request,
+            statusCode: 200,
+            data: jsonDecode(cached),
+            extra: {'offline': true}));
         return;
       }
     }

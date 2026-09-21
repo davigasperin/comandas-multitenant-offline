@@ -31,7 +31,7 @@ class OrdersScreen extends StatelessWidget {
 
 class _OrdersList extends ConsumerWidget {
   final bool isClosed;
-  
+
   const _OrdersList({required this.isClosed});
 
   @override
@@ -51,9 +51,11 @@ class _OrdersList extends ConsumerWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.wifi_off_rounded, size: 48, color: Colors.grey),
+                  const Icon(Icons.wifi_off_rounded,
+                      size: 48, color: Colors.grey),
                   const SizedBox(height: 16),
-                  Text('Erro ao carregar comandas: $err', textAlign: TextAlign.center),
+                  Text('Erro ao carregar comandas: $err',
+                      textAlign: TextAlign.center),
                   const SizedBox(height: 16),
                   OutlinedButton(
                     onPressed: () => ref.refresh(provider.future),
@@ -74,7 +76,9 @@ class _OrdersList extends ConsumerWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        isClosed ? Icons.assignment_turned_in_outlined : Icons.receipt_long_outlined,
+                        isClosed
+                            ? Icons.assignment_turned_in_outlined
+                            : Icons.receipt_long_outlined,
                         size: 48,
                         color: Colors.grey,
                       ),
@@ -83,7 +87,8 @@ class _OrdersList extends ConsumerWidget {
                         isClosed
                             ? 'Nenhuma comanda fechada.'
                             : 'Nenhuma comanda aberta no momento.',
-                        style: const TextStyle(fontSize: 16, color: Colors.grey),
+                        style:
+                            const TextStyle(fontSize: 16, color: Colors.grey),
                       ),
                     ],
                   ),
@@ -97,6 +102,7 @@ class _OrdersList extends ConsumerWidget {
             separatorBuilder: (_, __) => const SizedBox(height: 8),
             itemBuilder: (context, index) {
               final order = orders[index];
+              final isLocalPending = order.id.startsWith('temp_');
               return Card(
                 child: InkWell(
                   onTap: () => Navigator.of(context).push(
@@ -106,27 +112,57 @@ class _OrdersList extends ConsumerWidget {
                   ),
                   borderRadius: BorderRadius.circular(8),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 16),
                     child: Row(
                       children: [
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                order.tableLabel,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                              Row(
+                                children: [
+                                  Text(
+                                    order.tableLabel,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  if (isLocalPending) ...[
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.amber.shade100,
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(
+                                            color: Colors.amber.shade400),
+                                      ),
+                                      child: Text(
+                                        'OFFLINE PENDENTE',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.amber.shade900,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                               const SizedBox(height: 6),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: order.status.color.withValues(alpha: 0.1),
+                                  color:
+                                      order.status.color.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(color: order.status.color.withValues(alpha: 0.3)),
+                                  border: Border.all(
+                                      color: order.status.color
+                                          .withValues(alpha: 0.3)),
                                 ),
                                 child: Text(
                                   order.status.label.toUpperCase(),
@@ -188,8 +224,8 @@ class _CreateOrderFabState extends ConsumerState<CreateOrderFab> {
             child: TextFormField(
               autofocus: true,
               decoration: const InputDecoration(labelText: 'Mesa ou Cliente'),
-              validator: (val) => val == null || val.trim().isEmpty 
-                  ? 'Informe a mesa/comanda' 
+              validator: (val) => val == null || val.trim().isEmpty
+                  ? 'Informe a mesa/comanda'
                   : null,
               onSaved: (val) => _tableLabel = val!.trim(),
             ),
@@ -201,8 +237,11 @@ class _CreateOrderFabState extends ConsumerState<CreateOrderFab> {
             ),
             ElevatedButton(
               onPressed: _submit,
-              child: _isLoading 
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              child: _isLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2))
                   : const Text('Criar'),
             ),
           ],
@@ -221,9 +260,9 @@ class _CreateOrderFabState extends ConsumerState<CreateOrderFab> {
     try {
       final repo = ref.read(ordersRepositoryProvider);
       final newOrder = await repo.createOrder(tableLabel: _tableLabel);
-      
+
       ref.invalidate(openOrdersProvider);
-      
+
       navigator.pop(); // fecha dialog
       navigator.push(
         MaterialPageRoute(
@@ -250,4 +289,3 @@ class _CreateOrderFabState extends ConsumerState<CreateOrderFab> {
     );
   }
 }
-

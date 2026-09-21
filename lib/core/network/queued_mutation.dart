@@ -14,6 +14,9 @@ class QueuedMutation extends Equatable {
   final MutationStatus status;
   final int retryCount;
   final String? lastError;
+  final String? tempOrderId;
+  final String? dependsOnTempOrderId;
+  final DateTime? nextAttemptAt;
 
   const QueuedMutation({
     required this.id,
@@ -27,6 +30,9 @@ class QueuedMutation extends Equatable {
     this.status = MutationStatus.pending,
     this.retryCount = 0,
     this.lastError,
+    this.tempOrderId,
+    this.dependsOnTempOrderId,
+    this.nextAttemptAt,
   });
 
   QueuedMutation copyWith({
@@ -41,6 +47,10 @@ class QueuedMutation extends Equatable {
     MutationStatus? status,
     int? retryCount,
     String? lastError,
+    String? tempOrderId,
+    String? dependsOnTempOrderId,
+    DateTime? nextAttemptAt,
+    bool clearNextAttemptAt = false,
   }) {
     return QueuedMutation(
       id: id ?? this.id,
@@ -54,6 +64,10 @@ class QueuedMutation extends Equatable {
       status: status ?? this.status,
       retryCount: retryCount ?? this.retryCount,
       lastError: lastError ?? this.lastError,
+      tempOrderId: tempOrderId ?? this.tempOrderId,
+      dependsOnTempOrderId: dependsOnTempOrderId ?? this.dependsOnTempOrderId,
+      nextAttemptAt:
+          clearNextAttemptAt ? null : (nextAttemptAt ?? this.nextAttemptAt),
     );
   }
 
@@ -70,6 +84,11 @@ class QueuedMutation extends Equatable {
       'status': status.name,
       'retry_count': retryCount,
       'last_error': lastError,
+      if (tempOrderId != null) 'temp_order_id': tempOrderId,
+      if (dependsOnTempOrderId != null)
+        'depends_on_temp_order_id': dependsOnTempOrderId,
+      if (nextAttemptAt != null)
+        'next_attempt_at': nextAttemptAt!.toIso8601String(),
     };
   }
 
@@ -79,7 +98,9 @@ class QueuedMutation extends Equatable {
       idempotencyKey: json['idempotency_key'] as String,
       method: json['method'] as String,
       path: json['path'] as String,
-      body: json['body'] != null ? Map<String, dynamic>.from(json['body'] as Map) : null,
+      body: json['body'] != null
+          ? Map<String, dynamic>.from(json['body'] as Map)
+          : null,
       tenantId: json['tenant_id'] as String,
       userId: json['user_id'] as String,
       createdAt: DateTime.parse(json['created_at'] as String),
@@ -89,6 +110,11 @@ class QueuedMutation extends Equatable {
       ),
       retryCount: (json['retry_count'] as num?)?.toInt() ?? 0,
       lastError: json['last_error'] as String?,
+      tempOrderId: json['temp_order_id'] as String?,
+      dependsOnTempOrderId: json['depends_on_temp_order_id'] as String?,
+      nextAttemptAt: json['next_attempt_at'] != null
+          ? DateTime.parse(json['next_attempt_at'] as String)
+          : null,
     );
   }
 
@@ -105,5 +131,8 @@ class QueuedMutation extends Equatable {
         status,
         retryCount,
         lastError,
+        tempOrderId,
+        dependsOnTempOrderId,
+        nextAttemptAt,
       ];
 }

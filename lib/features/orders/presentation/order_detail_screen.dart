@@ -88,10 +88,15 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     setState(() => _isClosing = true);
     try {
-      await ref.read(ordersRepositoryProvider).closeOrder(order.id);
+      final confirmedServer =
+          await ref.read(ordersRepositoryProvider).closeOrder(order.id);
       _invalidateAll();
       scaffoldMessenger.showSnackBar(
-        SnackBar(content: Text('${order.tableLabel} fechada com sucesso.')),
+        SnackBar(
+          content: Text(confirmedServer
+              ? '${order.tableLabel} fechada com sucesso.'
+              : '${order.tableLabel} fechamento colocado na fila offline (pendente).'),
+        ),
       );
     } catch (err) {
       scaffoldMessenger.showSnackBar(
@@ -144,9 +149,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                   children: [
                     Text(
                       'Adicionar item',
-                      style: Theme.of(modalContext).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                      style:
+                          Theme.of(modalContext).textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
                     ),
                     const SizedBox(height: 16),
                     DropdownButtonFormField<Product>(
@@ -169,7 +175,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                     const SizedBox(height: 16),
                     Row(
                       children: [
-                        const Text('Quantidade:', style: TextStyle(fontSize: 16)),
+                        const Text('Quantidade:',
+                            style: TextStyle(fontSize: 16)),
                         const Spacer(),
                         IconButton.outlined(
                           icon: const Icon(Icons.remove),
@@ -210,13 +217,17 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                             : () async {
                                 final selected = selectedProduct;
                                 final qty = quantity;
-                                final notes = notesController.text.trim().isEmpty
-                                    ? null
-                                    : notesController.text.trim();
+                                final notes =
+                                    notesController.text.trim().isEmpty
+                                        ? null
+                                        : notesController.text.trim();
                                 setModalState(() => _isAddingItem = true);
-                                final scaffoldMessenger = ScaffoldMessenger.of(context);
+                                final scaffoldMessenger =
+                                    ScaffoldMessenger.of(context);
                                 try {
-                                  await ref.read(ordersRepositoryProvider).addItem(
+                                  await ref
+                                      .read(ordersRepositoryProvider)
+                                      .addItem(
                                         orderId: widget.orderId,
                                         productId: selected.id,
                                         quantity: qty,
@@ -230,7 +241,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                   if (!mounted) return;
                                   scaffoldMessenger.showSnackBar(
                                     SnackBar(
-                                      content: Text('Erro ao adicionar item: $err'),
+                                      content:
+                                          Text('Erro ao adicionar item: $err'),
                                     ),
                                   );
                                 } finally {
@@ -315,7 +327,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                           ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: order.status.color.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
@@ -341,7 +354,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.playlist_add, size: 48, color: Colors.grey),
+                            const Icon(Icons.playlist_add,
+                                size: 48, color: Colors.grey),
                             const SizedBox(height: 16),
                             const Text('Nenhum item lançado.'),
                             const SizedBox(height: 16),
@@ -361,7 +375,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                           final item = order.items[index];
                           return ListTile(
                             contentPadding: EdgeInsets.zero,
-                            title: Text('${item.quantity}x ${item.productName}'),
+                            title:
+                                Text('${item.quantity}x ${item.productName}'),
                             subtitle: Text(
                               '${currency.format(item.unitPrice)} cada${item.notes != null ? "\n• ${item.notes}" : ""}',
                             ),
@@ -382,7 +397,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                   children: [
                     const Text(
                       'Total',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                     ),
                     Text(
                       currency.format(order.total),
@@ -412,7 +428,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                               ? const SizedBox(
                                   width: 16,
                                   height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
                                 )
                               : const Icon(Icons.add_shopping_cart),
                           label: const Text('Item'),

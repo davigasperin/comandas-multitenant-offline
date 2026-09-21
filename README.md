@@ -84,7 +84,8 @@ A comunicação entre garçom e cozinha opera em tempo real sem sobrecarregar o 
 ### 3. 📶 Resiliência Offline-First (Wi-Fi de Bar Instável)
 Em horários de pico, a rede local frequentemente oscila. A arquitetura trata a instabilidade através de:
 - **Cache Determinístico de Leitura:** Respostas dos endpoints `/orders`, `/orders/:id` e `/orders/products` são serializadas localmente no `SharedPreferences` com chaves escopadas por `[userId, tenantId, path, queryParams]`. Em timeout ou erro de rede, o interceptor resolve o payload do cache marcando a resposta com `extra: {'offline': true}`.
-- **Continuidade de Leitura:** Quando a rede falha, consultas elegíveis são resolvidas pelo cache local, permitindo consultar comandas já sincronizadas.
+- **Fila Durável de Mutações com Idempotência:** Mutações de escrita (`POST`, `PATCH`, `DELETE`) executadas sem conectividade são interceptadas, gravadas em fila persistente com transações seguras, chaves de idempotência únicas e rastreamento estrito de proprietário/tenant.
+- **Limitações e Comportamento Real:** Devido a restrições de armazenamento local em navegadores e dispositivos móveis, a persistência depende de armazenamento durável local (SharedPreferences/Sembast). Não há promessas de durabilidade contra exclusão manual de dados do navegador ou despejo de armazenamento (*browser eviction*). A sincronização ocorre automaticamente quando o aplicativo está em execução e a sessão autenticada é validada. Redirecionamentos, falhas permanentes (erros 4xx) e reconfirmações tratam dependências encadeadas e mapeamento de IDs temporários automaticamente.
 
 ### 4. 🔒 Motor de Idempotência Distribuída com Hash de Payload
 Falhas transitórias de rede podem induzir cliques duplos do operador ou reenvios duplicados de pedidos:

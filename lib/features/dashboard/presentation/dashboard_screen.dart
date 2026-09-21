@@ -22,7 +22,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       context: context,
       builder: (dialogCtx) => AlertDialog(
         title: const Text('Sair da conta?'),
-        content: const Text('Você precisará entrar com e-mail e senha novamente.'),
+        content:
+            const Text('Você precisará entrar com e-mail e senha novamente.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogCtx).pop(false),
@@ -75,8 +76,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pendingCount = ref.watch(pendingMutationCountProvider).valueOrNull ??
-        ref.watch(syncServiceProvider).pendingCount;
+    final pendingCount =
+        ref.watch(pendingMutationCountProvider).valueOrNull ?? 0;
 
     return DefaultTabController(
       length: 2,
@@ -96,7 +97,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ? const SizedBox(
                       width: 20,
                       height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
                     )
                   : Badge(
                       isLabelVisible: pendingCount > 0,
@@ -105,15 +107,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ),
               onPressed: _isSyncing ? null : () => _handleSync(context),
             ),
-             IconButton(
-               tooltip: 'KDS cozinha',
-               icon: const Icon(Icons.view_kanban_outlined),
-               onPressed: () => Navigator.of(context).push(
-                 MaterialPageRoute(builder: (_) => const KdsScreen()),
-               ),
-             ),
-             IconButton(
-               tooltip: 'Trocar empresa',
+            IconButton(
+              tooltip: 'KDS cozinha',
+              icon: const Icon(Icons.view_kanban_outlined),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const KdsScreen()),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Trocar empresa',
               icon: const Icon(Icons.swap_horiz),
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const TenantSwitchScreen()),

@@ -66,10 +66,13 @@ class _KdsScreenState extends ConsumerState<KdsScreen> {
     return '${diff.inSeconds}s';
   }
 
-  Future<void> _updateStatus(String orderId, String targetStatus, String label) async {
+  Future<void> _updateStatus(
+      String orderId, String targetStatus, String label) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await ref.read(ordersRepositoryProvider).updateOrderStatus(orderId: orderId, status: targetStatus);
+      await ref
+          .read(ordersRepositoryProvider)
+          .updateOrderStatus(orderId: orderId, status: targetStatus);
       _invalidateAll();
     } catch (e) {
       if (!mounted) return;
@@ -83,10 +86,11 @@ class _KdsScreenState extends ConsumerState<KdsScreen> {
   Widget build(BuildContext context) {
     // Listen to real-time events and invalidate
     ref.listen(socketServiceProvider, (previous, next) {});
-    
+
     // Also listen to socket connection state stream
     final connectionStateAsync = ref.watch(socketConnectionStateProvider);
-    final isConnected = connectionStateAsync.valueOrNull == SocketConnectionState.connected;
+    final isConnected =
+        connectionStateAsync.valueOrNull == SocketConnectionState.connected;
 
     final ordersAsync = ref.watch(openOrdersProvider);
 
@@ -99,12 +103,16 @@ class _KdsScreenState extends ConsumerState<KdsScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: isConnected ? Colors.green.shade700 : Colors.red.shade700,
+                color:
+                    isConnected ? Colors.green.shade700 : Colors.red.shade700,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
                 isConnected ? 'CONECTADO' : 'DESCONECTADO',
-                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+                style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white),
               ),
             ),
           ],
@@ -136,22 +144,41 @@ class _KdsScreenState extends ConsumerState<KdsScreen> {
         ),
         data: (orders) {
           // Filter out closed/canceled
-          final activeOrders = orders.where((o) => o.status != OrderStatus.closed && o.status != OrderStatus.canceled).toList();
+          final activeOrders = orders
+              .where((o) =>
+                  o.status != OrderStatus.closed &&
+                  o.status != OrderStatus.canceled)
+              .toList();
 
-          final openList = activeOrders.where((o) => o.status == OrderStatus.open).toList();
-          final prepList = activeOrders.where((o) => o.status == OrderStatus.sentToKitchen).toList();
-          final deliveredList = activeOrders.where((o) => o.status == OrderStatus.delivered).toList();
+          final openList =
+              activeOrders.where((o) => o.status == OrderStatus.open).toList();
+          final prepList = activeOrders
+              .where((o) => o.status == OrderStatus.sentToKitchen)
+              .toList();
+          final deliveredList = activeOrders
+              .where((o) => o.status == OrderStatus.delivered)
+              .toList();
 
           return LayoutBuilder(
             builder: (context, constraints) {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(child: _buildColumn(context, 'Novos', openList, isConnected, primaryActionName: 'Preparar', targetStatus: 'sentToKitchen')),
+                  Expanded(
+                      child: _buildColumn(
+                          context, 'Novos', openList, isConnected,
+                          primaryActionName: 'Preparar',
+                          targetStatus: 'sentToKitchen')),
                   const VerticalDivider(width: 1, thickness: 1),
-                  Expanded(child: _buildColumn(context, 'Em preparo', prepList, isConnected, primaryActionName: 'Pronto', targetStatus: 'delivered')),
+                  Expanded(
+                      child: _buildColumn(
+                          context, 'Em preparo', prepList, isConnected,
+                          primaryActionName: 'Pronto',
+                          targetStatus: 'delivered')),
                   const VerticalDivider(width: 1, thickness: 1),
-                  Expanded(child: _buildColumn(context, 'Prontos', deliveredList, isConnected)),
+                  Expanded(
+                      child: _buildColumn(
+                          context, 'Prontos', deliveredList, isConnected)),
                 ],
               );
             },
@@ -182,7 +209,8 @@ class _KdsScreenState extends ConsumerState<KdsScreen> {
               children: [
                 Text(
                   title.toUpperCase(),
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 13),
                 ),
                 Badge(
                   label: Text('${orders.length}'),
@@ -196,7 +224,8 @@ class _KdsScreenState extends ConsumerState<KdsScreen> {
                 ? Center(
                     child: Text(
                       'Nenhum pedido',
-                      style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+                      style:
+                          TextStyle(color: Colors.grey.shade500, fontSize: 13),
                     ),
                   )
                 : ListView.builder(
@@ -211,7 +240,8 @@ class _KdsScreenState extends ConsumerState<KdsScreen> {
                         child: InkWell(
                           onTap: () => Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (_) => OrderDetailScreen(orderId: order.id),
+                              builder: (_) =>
+                                  OrderDetailScreen(orderId: order.id),
                             ),
                           ),
                           borderRadius: BorderRadius.circular(8),
@@ -221,15 +251,19 @@ class _KdsScreenState extends ConsumerState<KdsScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
                                       order.tableLabel,
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15),
                                     ),
                                     Row(
                                       children: [
-                                        const Icon(Icons.timer_outlined, size: 14, color: Colors.grey),
+                                        const Icon(Icons.timer_outlined,
+                                            size: 14, color: Colors.grey),
                                         const SizedBox(width: 4),
                                         Text(
                                           age,
@@ -245,25 +279,30 @@ class _KdsScreenState extends ConsumerState<KdsScreen> {
                                 ),
                                 const Divider(height: 12),
                                 ...order.items.map((item) => Padding(
-                                      padding: const EdgeInsets.symmetric(vertical: 2),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 2),
                                       child: Text(
                                         '• ${item.quantity}x ${item.productName}${item.notes != null ? " (${item.notes})" : ""}',
                                         style: const TextStyle(fontSize: 13),
                                       ),
                                     )),
-                                if (primaryActionName != null && targetStatus != null) ...[
+                                if (primaryActionName != null &&
+                                    targetStatus != null) ...[
                                   const SizedBox(height: 8),
                                   SizedBox(
                                     width: double.infinity,
                                     child: ElevatedButton.icon(
                                       style: ElevatedButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(vertical: 8),
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 8),
                                         minimumSize: const Size(0, 36),
                                       ),
                                       onPressed: isConnected
-                                          ? () => _updateStatus(order.id, targetStatus, primaryActionName)
+                                          ? () => _updateStatus(order.id,
+                                              targetStatus, primaryActionName)
                                           : null,
-                                      icon: const Icon(Icons.arrow_forward, size: 16),
+                                      icon: const Icon(Icons.arrow_forward,
+                                          size: 16),
                                       label: Text(primaryActionName),
                                     ),
                                   ),

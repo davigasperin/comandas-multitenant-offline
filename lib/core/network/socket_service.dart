@@ -11,20 +11,24 @@ class SocketService {
   final String _url;
   io.Socket? _socket;
 
-  final _connectionStateController = StreamController<SocketConnectionState>.broadcast();
+  final _connectionStateController =
+      StreamController<SocketConnectionState>.broadcast();
   final _orderEventsController = StreamController<String>.broadcast();
 
   SocketConnectionState _currentState = SocketConnectionState.disconnected;
 
-  SocketService(this._storage, {String? url}) : _url = url ?? AppConstants.wsUrl;
+  SocketService(this._storage, {String? url})
+      : _url = url ?? AppConstants.wsUrl;
 
-  Stream<SocketConnectionState> get connectionStateStream => _connectionStateController.stream;
+  Stream<SocketConnectionState> get connectionStateStream =>
+      _connectionStateController.stream;
   SocketConnectionState get currentState => _currentState;
   Stream<String> get orderEventsStream => _orderEventsController.stream;
 
   Future<void> connect() async {
     final token = await _storage.read(key: AppConstants.storageKeyAccessToken);
-    final tenantId = await _storage.read(key: AppConstants.storageKeySelectedTenantId);
+    final tenantId =
+        await _storage.read(key: AppConstants.storageKeySelectedTenantId);
 
     if (token == null || tenantId == null) {
       _updateState(SocketConnectionState.disconnected);

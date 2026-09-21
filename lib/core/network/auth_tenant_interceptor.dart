@@ -11,7 +11,9 @@ class AuthTenantInterceptor extends Interceptor {
   AuthTenantInterceptor(this._storage, this._dio);
 
   bool _isAuthEndpoint(String path) =>
-      path == '/auth/login' || path == '/auth/refresh' || path == '/auth/logout';
+      path == '/auth/login' ||
+      path == '/auth/refresh' ||
+      path == '/auth/logout';
 
   Future<String?> _refreshAccessToken() async {
     final existing = _refreshing;
@@ -63,15 +65,26 @@ class AuthTenantInterceptor extends Interceptor {
     try {
       final token =
           await _storage.read(key: AppConstants.storageKeyAccessToken);
-      final tenant = await _storage.read(
-          key: AppConstants.storageKeySelectedTenantId);
+      final tenant =
+          await _storage.read(key: AppConstants.storageKeySelectedTenantId);
       final owner = await _storage.read(key: AppConstants.storageKeyUserId);
       if (options.extra['offlineReplay'] == true) {
-        handler.reject(DioException(
+        final expectedTenant = options.headers['X-Tenant-Id']?.toString();
+        final expectedOwner = options.extra['expectedOwner']?.toString();
+        if (expectedTenant != null && expectedTenant != tenant) {
+          handler.reject(DioException(
             requestOptions: options,
-            message:
-                'Legacy offline queue cannot safely identify its authenticated owner.'));
-        return;
+            message: 'Active tenant changed before offline replay dispatch.',
+          ));
+          return;
+        }
+        if (expectedOwner != null && expectedOwner != owner) {
+          handler.reject(DioException(
+            requestOptions: options,
+            message: 'Active user changed before offline replay dispatch.',
+          ));
+          return;
+        }
       }
       options.headers.remove('Authorization');
       options.headers.remove(AppConstants.tenantHeaderKey);

@@ -5,7 +5,8 @@ class ApiException implements Exception {
   const ApiException(this.message, {this.statusCode});
 
   factory ApiException.unauthorized() =>
-      const ApiException('Sessão expirada. Faça login novamente.', statusCode: 401);
+      const ApiException('Sessão expirada. Faça login novamente.',
+          statusCode: 401);
 
   factory ApiException.noTenantSelected() =>
       const ApiException('Nenhuma empresa selecionada.');

@@ -4,7 +4,6 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'mutation_queue_storage.dart';
-import 'queued_mutation.dart';
 import 'offline_interceptor.dart';
 import 'sync_service.dart';
 import 'socket_service.dart';
@@ -49,11 +48,30 @@ final syncServiceProvider = Provider<SyncService>((ref) {
   return service;
 });
 
+final currentUserIdProvider = FutureProvider<String?>((ref) async {
+  final storage = ref.watch(secureStorageProvider);
+  return storage.read(key: 'user_id');
+});
+
+final currentTenantIdProvider = FutureProvider<String?>((ref) async {
+  final storage = ref.watch(secureStorageProvider);
+  return storage.read(key: 'selected_tenant_id');
+});
+
 final pendingMutationCountProvider = StreamProvider<int>((ref) async* {
   final storage = ref.watch(mutationQueueStorageProvider);
-  yield storage.getAll().where((m) => m.status == MutationStatus.pending || m.status == MutationStatus.failed).length;
+  final secureStorage = ref.watch(secureStorageProvider);
+
+  Future<int> computeScopedCount() async {
+    final tenantId = await secureStorage.read(key: 'selected_tenant_id');
+    final userId = await secureStorage.read(key: 'user_id');
+    if (tenantId == null || userId == null) return 0;
+    return storage.getPendingFor(tenantId: tenantId, userId: userId).length;
+  }
+
+  yield await computeScopedCount();
   await for (final _ in storage.changes) {
-    yield storage.getAll().where((m) => m.status == MutationStatus.pending || m.status == MutationStatus.failed).length;
+    yield await computeScopedCount();
   }
 });
 
@@ -64,17 +82,20 @@ final socketServiceProvider = Provider<SocketService>((ref) {
   return service;
 });
 
-final socketConnectionStateProvider = StreamProvider.autoDispose<SocketConnectionState>((ref) {
+final socketConnectionStateProvider =
+    StreamProvider.autoDispose<SocketConnectionState>((ref) {
   final socketService = ref.watch(socketServiceProvider);
   return socketService.connectionStateStream;
 });
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
-  return AuthRepository(ref.watch(dioProvider), ref.watch(secureStorageProvider));
+  return AuthRepository(
+      ref.watch(dioProvider), ref.watch(secureStorageProvider));
 });
 
 final tenantRepositoryProvider = Provider<TenantRepository>((ref) {
-  return TenantRepository(ref.watch(dioProvider), ref.watch(secureStorageProvider));
+  return TenantRepository(
+      ref.watch(dioProvider), ref.watch(secureStorageProvider));
 });
 
 final ordersRepositoryProvider = Provider<OrdersRepository>((ref) {
