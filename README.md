@@ -78,7 +78,7 @@ A comunicação entre garçom e cozinha opera em tempo real sem sobrecarregar o 
 - **Transição Sequencial e Atômica de Status:** Transições de estado seguem a máquina de estados finita:
   $$\text{open} \longrightarrow \text{sentToKitchen} \longrightarrow \text{delivered} \longrightarrow \text{closed}$$
   Regressões ou saltos de estado são rejeitados pelo backend.
-- **KDS Responsivo (Flutter):** Interface dividida em 3 colunas (**Novos**, **Em preparo**, **Prontos**) com cronômetro dinâmico de tempo de espera, badges visuais de SLA e botões de avanço de status desabilitados em modo offline.
+- **KDS Responsivo (Flutter):** Interface dividida em 3 colunas (**Novos**, **Em preparo**, **Prontos**) com cronômetro dinâmico de tempo de espera e botões de avanço de status desabilitados em modo offline.
 - **Fallback Híbrido:** Caso o tablet da cozinha perca a conexão WebSocket, um timer de 30 segundos realiza sincronização REST automática como mecanismo de contingência.
 
 ### 3. 📶 Resiliência Offline-First (Wi-Fi de Bar Instável)
@@ -94,9 +94,9 @@ Falhas transitórias de rede podem induzir cliques duplos do operador ou reenvio
 - Caso a mesma chave seja enviada com o mesmo payload, o backend retorna a resposta persistida com custo computacional mínimo.
 - Se a mesma chave for reutilizada com payload diferente (conflito de intenção), o backend rejeita a operação com `HTTP 409 Conflict`.
 
-### 5. 🖨️ Impressão Térmica de Recibos (80mm) via Spooler do SO
-- **Arquitetura Desacoplada de Hardware:** Em vez de depender de drivers ESC/POS proprietários ou pareamentos Bluetooth instáveis que travam o app, o sistema gera o cupom fiscal/gerencial em padrão térmico de 80mm (`roll80`) delegando a emissão para o spooler nativo do sistema operacional (`printing` / `pdf`).
-- Compatível imediatamente com impressoras de rede (TCP/IP), Bluetooth, USB e emuladores de terminal de mesa.
+### 5. 🖨️ Geração de Recibos Térmicos (80mm) via Spooler do SO
+- **Arquitetura Desacoplada de Hardware:** Em vez de depender de drivers ESC/POS proprietários ou pareamentos Bluetooth que travam o app, o sistema gera o cupom em formato de 80mm (`roll80`) delegando a impressão para o spooler nativo do sistema operacional (`printing` / `pdf`).
+- Compatível com impressoras acessíveis via spooler do SO (rede, Bluetooth emparelhado ou USB) e visualização de impressão nativa.
 - Cabeçalho dinâmico com identificação visual do estabelecimento e formatação tabular alinhada.
 
 ### 6. 💎 Integridade Financeira, Concorrência Otimista & Clean Architecture
@@ -157,6 +157,26 @@ comandas_app/
 ---
 
 ## 🔌 Catálogo de Endpoints & Eventos
+
+### Documentação OpenAPI
+
+Com o backend em execução, a especificação interativa Swagger está disponível em:
+
+```text
+http://localhost:3000/docs
+```
+
+A documentação inclui autenticação Bearer JWT, cabeçalhos `X-Tenant-Id` e `X-Idempotency-Key`, paginação por cursor e respostas de erro.
+
+### Matriz RBAC Operacional
+
+| Operação | Garçom | Cozinha | Caixa | Gerente |
+| :--- | :---: | :---: | :---: | :---: |
+| Consultar pedidos | Sim | Sim | Sim | Sim |
+| Abrir comanda / adicionar itens | Sim | Não | Sim | Sim |
+| Alterar status operacional | Não | Sim | Sim | Sim |
+| Fechar comanda | Não | Não | Sim | Sim |
+| Configurações administrativas | Não | Não | Não | Sim |
 
 ### API REST (`/v1`)
 
