@@ -102,40 +102,48 @@ async function runSecurityTests() {
     data: { password: hashedLoginPass },
   });
 
+  // Test invalid login
+  let invalidLoginFailed = false;
+  try {
+    await authService.login(legacyEmail, 'WrongPassword!');
+  } catch (err) {
+    if (err instanceof UnauthorizedException) invalidLoginFailed = true;
+  }
+  assert.strictEqual(invalidLoginFailed, true, 'Invalid password must throw UnauthorizedException');
+
   const session = await authService.login(legacyEmail, testLoginPassword);
   assert.ok(session.access_token);
   assert.ok(session.refresh_token);
 
-  // Test refresh token rotation
+  // Test refresh token rotation (strict single-use)
   const refreshed = await authService.refresh(session.refresh_token);
   assert.ok(refreshed.access_token);
   assert.ok(refreshed.refresh_token);
   assert.notStrictEqual(refreshed.refresh_token, session.refresh_token, 'Refresh token must rotate');
 
-  // Test concurrent refresh with old token within grace window
-  const concurrentRefresh = await authService.refresh(session.refresh_token);
-  assert.ok(concurrentRefresh.access_token, 'Concurrent refresh within grace window must succeed');
-  assert.ok(concurrentRefresh.refresh_token);
-
-  // Test reuse attack outside grace window: manually backdate revokedAt
-  await prisma.refreshToken.updateMany({
-    where: { tokenHash: hashToken(session.refresh_token) },
-    data: { revokedAt: new Date(Date.now() - 30000) },
-  });
-
+  // Test reuse attack: presenting the already-rotated token must immediately fail and revoke session family
   let reuseDetected = false;
   try {
     await authService.refresh(session.refresh_token);
   } catch (err) {
     if (err instanceof UnauthorizedException) reuseDetected = true;
   }
-  assert.strictEqual(reuseDetected, true, 'Reuse attack outside grace window must throw Unauthorized');
+  assert.strictEqual(reuseDetected, true, 'Reuse of rotated token must throw UnauthorizedException');
 
   // Verify all user tokens were revoked after reuse attack
   const remainingActiveTokens = await prisma.refreshToken.count({
     where: { userId: session.user.id, revokedAt: null },
   });
   assert.strictEqual(remainingActiveTokens, 0, 'Reuse attack must revoke all active refresh tokens for user');
+
+  // Verify the previously issued token is now also invalidated due to reuse detection
+  let cascadeRevocationConfirmed = false;
+  try {
+    await authService.refresh(refreshed.refresh_token);
+  } catch (err) {
+    if (err instanceof UnauthorizedException) cascadeRevocationConfirmed = true;
+  }
+  assert.strictEqual(cascadeRevocationConfirmed, true, 'Token family must be revoked after reuse');
 
   // Log in fresh for logout test
   const freshSession = await authService.login(legacyEmail, testLoginPassword);

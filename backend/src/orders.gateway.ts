@@ -2,18 +2,13 @@ import { JwtService } from '@nestjs/jwt';
 import { ConnectedSocket, OnGatewayConnection, WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { PrismaService } from './prisma.service';
-import { getCorsOriginValidator } from './config.utils';
+import { getCorsOptions, getCorsOriginValidator } from './config.utils';
 
 const corsOriginValidator = getCorsOriginValidator(process.env.CORS_ORIGINS ?? 'http://localhost:3000');
 
 @WebSocketGateway({
   namespace: '/orders',
-  cors: {
-    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-      callback(null, corsOriginValidator(origin));
-    },
-    credentials: false,
-  },
+  cors: getCorsOptions(process.env.CORS_ORIGINS ?? 'http://localhost:3000'),
 })
 export class OrdersGateway implements OnGatewayConnection {
   @WebSocketServer()
@@ -57,6 +52,7 @@ export class OrdersGateway implements OnGatewayConnection {
       client.data.userId = payload.sub;
       client.data.tenantId = tenantId;
       await client.join(tenantId);
+      if (typeof client.emit === 'function') client.emit('authenticated');
     } catch {
       client.disconnect(true);
     }

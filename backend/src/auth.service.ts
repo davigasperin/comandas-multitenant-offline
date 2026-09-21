@@ -4,7 +4,6 @@ import { PrismaService } from './prisma.service';
 import { generateRefreshToken, hashToken, verifyPassword } from './auth.utils';
 
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-const CONCURRENT_GRACE_MS = 10 * 1000;
 
 @Injectable()
 export class AuthService {
@@ -54,24 +53,6 @@ export class AuthService {
     }
 
     if (tokenRecord.revokedAt) {
-      const elapsed = Date.now() - tokenRecord.revokedAt.getTime();
-      const inGraceWindow = tokenRecord.replacedBy && elapsed <= CONCURRENT_GRACE_MS;
-
-      if (inGraceWindow) {
-        await this.prisma.refreshToken.create({
-          data: {
-            tokenHash: replacementHash,
-            userId: tokenRecord.userId,
-            expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
-          },
-        });
-        return {
-          user: { id: tokenRecord.user.id, name: tokenRecord.user.name, email: tokenRecord.user.email },
-          access_token: await this.jwtService.signAsync({ sub: tokenRecord.user.id, email: tokenRecord.user.email }),
-          refresh_token: replacement,
-        };
-      }
-
       await this.prisma.refreshToken.updateMany({
         where: { userId: tokenRecord.userId, revokedAt: null },
         data: { revokedAt: new Date() },
@@ -86,21 +67,10 @@ export class AuthService {
       });
 
       if (claimed.count !== 1) {
-        const recheck = await tx.refreshToken.findUnique({ where: { id: tokenRecord.id } });
-        if (recheck?.revokedAt && Date.now() - recheck.revokedAt.getTime() <= CONCURRENT_GRACE_MS) {
-          await tx.refreshToken.create({
-            data: {
-              tokenHash: replacementHash,
-              userId: tokenRecord.userId,
-              expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
-            },
-          });
-          return {
-            user: { id: tokenRecord.user.id, name: tokenRecord.user.name, email: tokenRecord.user.email },
-            access_token: await this.jwtService.signAsync({ sub: tokenRecord.user.id, email: tokenRecord.user.email }),
-            refresh_token: replacement,
-          };
-        }
+        await tx.refreshToken.updateMany({
+          where: { userId: tokenRecord.userId, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
         this.unauthorized();
       }
 
@@ -121,8 +91,14 @@ export class AuthService {
   }
 
   async logout(rawToken: string): Promise<void> {
+    const tokenHash = hashToken(rawToken);
+    const tokenRecord = await this.prisma.refreshToken.findUnique({
+      where: { tokenHash },
+    });
+    if (!tokenRecord) return;
+
     await this.prisma.refreshToken.updateMany({
-      where: { tokenHash: hashToken(rawToken), revokedAt: null },
+      where: { userId: tokenRecord.userId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
   }

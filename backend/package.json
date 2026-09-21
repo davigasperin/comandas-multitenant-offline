@@ -7,7 +7,7 @@
     "start:dev": "ts-node-dev --respawn src/main.ts",
     "prisma:seed": "ts-node prisma/seed.ts",
     "migrate:passwords": "ts-node src/migrate-passwords.ts",
-    "test": "ts-node src/idempotency.test.ts && ts-node src/security.test.ts",
+    "test": "ts-node src/idempotency.test.ts && ts-node src/security.test.ts && ts-node src/e2e-protocol.test.ts",
     "test:idempotency": "ts-node src/idempotency.test.ts",
     "test:security": "ts-node src/security.test.ts"
   },
@@ -30,6 +30,7 @@
   "devDependencies": {
     "@types/node": "^20.11.0",
     "prisma": "^5.22.0",
+    "socket.io-client": "^4.8.3",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.3.3"

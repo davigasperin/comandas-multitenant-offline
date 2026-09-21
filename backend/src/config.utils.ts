@@ -15,3 +15,21 @@ export function getCorsOriginValidator(value: string | undefined): (origin: stri
   const allowed = parseCorsOrigins(value);
   return (origin) => origin === undefined || allowed.has(origin);
 }
+
+export type CorsOriginCallback = (err: Error | null, allow?: boolean) => void;
+
+export function createCorsOriginCallback(
+  value: string | undefined,
+): (origin: string | undefined, callback: CorsOriginCallback) => void {
+  const validator = getCorsOriginValidator(value);
+  return (origin, callback) => {
+    callback(null, validator(origin));
+  };
+}
+
+export function getCorsOptions(value: string | undefined) {
+  return {
+    origin: createCorsOriginCallback(value),
+    credentials: false,
+  };
+}
