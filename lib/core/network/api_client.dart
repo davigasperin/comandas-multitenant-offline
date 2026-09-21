@@ -23,7 +23,7 @@ class ApiClient {
       ),
     );
 
-    dio.interceptors.add(AuthTenantInterceptor(storage));
+    dio.interceptors.add(AuthTenantInterceptor(storage, dio));
     dio.interceptors.add(offlineInterceptor);
 
     return ApiClient._(dio);
