@@ -41,6 +41,10 @@ class OfflineInterceptor extends Interceptor {
   @override
   Future<void> onError(DioException err, ErrorInterceptorHandler handler) async {
     final request = err.requestOptions;
+    if (request.extra['skipOfflineQueue'] == true) {
+      handler.next(err);
+      return;
+    }
     if (_isTransient(err.type) && const ['POST', 'PATCH', 'PUT', 'DELETE'].contains(request.method)) {
       final tenantId = request.headers['X-Tenant-Id']?.toString();
       final userId = request.extra['owner']?.toString();

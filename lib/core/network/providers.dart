@@ -40,7 +40,10 @@ final dioProvider = Provider<Dio>((ref) {
 final syncServiceProvider = Provider<SyncService>((ref) {
   final prefs = ref.watch(sharedPreferencesProvider);
   final storage = ref.watch(secureStorageProvider);
-  return SyncService(ref.watch(dioProvider), prefs, storage);
+  final queue = ref.watch(mutationQueueStorageProvider);
+  final service = SyncService(ref.watch(dioProvider), prefs, storage, queue);
+  ref.onDispose(() => service.dispose());
+  return service;
 });
 
 final socketServiceProvider = Provider<SocketService>((ref) {
