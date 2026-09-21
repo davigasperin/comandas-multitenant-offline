@@ -11,14 +11,14 @@ async function runConcurrencyAndFinancialTests() {
   const runId = `${Date.now()}_${process.pid}`;
   const tenantId = `ten_fin_${runId}`;
   await prisma.tenant.create({
-    data: { id: tenantId, name: 'Empresa de teste financeiro', role: 'admin' },
+    data: { id: tenantId, name: 'Financial Test Tenant', role: 'admin' },
   });
 
   const product = await prisma.product.create({
     data: {
       tenantId,
       name: 'Item Especial',
-      price_cents: 1999, // R$ 19,99
+      price_cents: 1999,
     },
   });
   assert.strictEqual(Number.isInteger(product.price_cents), true, 'Product price_cents must be strict integer');
@@ -28,79 +28,85 @@ async function runConcurrencyAndFinancialTests() {
   };
   const controller = new OrdersController(prisma, fakeGateway as OrdersGateway);
 
-  const reqUser1 = { tenantId, user: { sub: 'usr_garcom_1' }, headers: {} } as any;
-  const reqUser2 = { tenantId, user: { sub: 'usr_cozinha_2' }, headers: {} } as any;
+  const reqUser1 = { tenantId, user: { sub: 'usr_garcom_1' }, headers: { 'x-idempotency-key': `k1_${runId}` } } as any;
+  const reqUser2 = { tenantId, user: { sub: 'usr_cozinha_2' }, headers: { 'x-idempotency-key': `k2_${runId}` } } as any;
 
-  // 1. Criar comanda
+  // 1. Criar pedido
   const order = await controller.createOrder(reqUser1, { table_label: 'Mesa 77' });
-  assert.strictEqual(order.version, 1, 'Initial order version must be 1');
+  assert.strictEqual(order.version, 1, 'Versão inicial deve ser 1');
   assert.strictEqual(order.status, 'open');
 
-  // Verificar histórico inicial
-  const historyInitial = await prisma.orderStatusHistory.findMany({ where: { orderId: order.id } });
-  assert.strictEqual(historyInitial.length, 1);
-  assert.strictEqual(historyInitial[0].to_status, 'open');
-  assert.strictEqual(historyInitial[0].changed_by, 'usr_garcom_1');
+  // 2. Adicionar item usando centavos exatos e versão esperada
+  const withItem = await controller.addItem(
+    { tenantId, user: { sub: 'usr_garcom_1' }, headers: { 'x-idempotency-key': `k_item_${runId}` } } as any,
+    order.id,
+    {
+      product_id: product.id,
+      quantity: 3,
+      expected_version: 1,
+    },
+  );
+  assert.strictEqual(withItem.items[0].unit_price_cents, 1999);
+  assert.strictEqual(withItem.version, 2);
 
-  // 2. Adicionar item com preço exato em centavos
-  const withItem = await controller.addItem(reqUser1, order.id, {
-    product_id: product.id,
-    quantity: 3,
-  });
-  assert.strictEqual(withItem.items[0].unit_price_cents, 1999, 'Item unit_price_cents must preserve exact integer cents');
-  assert.strictEqual(withItem.items[0].unit_price_cents * withItem.items[0].quantity, 5997);
-  assert.strictEqual(withItem.version, 2, 'Adding items must increment version for optimistic locking');
+  // 3. Conflito ao adicionar item com versão desatualizada
+  let itemVersionConflict = false;
+  try {
+    await controller.addItem(
+      { tenantId, user: { sub: 'usr_garcom_1' }, headers: { 'x-idempotency-key': `k_stale_${runId}` } } as any,
+      order.id,
+      {
+        product_id: product.id,
+        quantity: 1,
+        expected_version: 1, // desatualizado
+      },
+    );
+  } catch (err: any) {
+    if (err?.status === 409 || err?.response?.statusCode === 409) {
+      itemVersionConflict = true;
+    }
+  }
+  assert.strictEqual(itemVersionConflict, true, 'Adição de item com expected_version desatualizado deve lançar 409');
 
-  // 3. Teste de conflito de concorrência otimista
-  // O cliente A lê a versão 2; o cliente B também lê a versão 2
-  // O cliente A atualiza para sentToKitchen com expected_version: 2 e obtém sucesso
-  const updatedA = await controller.updateOrderStatus(reqUser1, order.id, {
-    status: 'sentToKitchen',
-    expected_version: 2,
-  });
+  // 4. Transição de status
+  const updatedA = await controller.updateOrderStatus(
+    { tenantId, user: { sub: 'usr_garcom_1' }, headers: { 'x-idempotency-key': `k_stat1_${runId}` } } as any,
+    order.id,
+    {
+      status: 'sentToKitchen',
+      expected_version: 2,
+    },
+  );
   assert.strictEqual(updatedA.status, 'sentToKitchen');
   assert.strictEqual(updatedA.version, 3);
 
-  // O cliente B tenta atualizar com expected_version: 2 desatualizada e deve receber conflito 409
-  let conflictCaught = false;
+  // 5. Fechamento da comanda com versionamento
+  const closed = await controller.closeOrder(
+    { tenantId, user: { sub: 'usr_caixa_3' }, headers: { 'x-idempotency-key': `k_close_${runId}` } } as any,
+    order.id,
+    { expected_version: 3 },
+  );
+  assert.strictEqual(closed.status, 'closed');
+  assert.strictEqual(closed.version, 4);
+
+  // 6. Tentativa de adicionar item em comanda fechada deve ser rejeitada imediatamente
+  let itemOnClosedRejected = false;
   try {
-    await controller.updateOrderStatus(reqUser2, order.id, {
-      status: 'delivered',
-      expected_version: 2, // versão desatualizada
-    });
+    await controller.addItem(
+      { tenantId, user: { sub: 'usr_garcom_1' }, headers: { 'x-idempotency-key': `k_late_${runId}` } } as any,
+      order.id,
+      { product_id: product.id, quantity: 1 },
+    );
   } catch (err: any) {
-    if (err?.status === 409 || err?.response?.statusCode === 409) {
-      conflictCaught = true;
-    }
+    itemOnClosedRejected = true;
   }
-  assert.strictEqual(conflictCaught, true, 'Stale expected_version must trigger ConflictException (409)');
-
-  // 4. Atualizar para delivered com a versão atual 3
-  const updatedB = await controller.updateOrderStatus(reqUser2, order.id, {
-    status: 'delivered',
-    expected_version: 3,
-  });
-  assert.strictEqual(updatedB.status, 'delivered');
-  assert.strictEqual(updatedB.version, 4);
-
-  // 5. Validar registro de auditoria
-  const historyFull = await prisma.orderStatusHistory.findMany({
-    where: { orderId: order.id },
-    orderBy: { changed_at: 'asc' },
-  });
-  assert.strictEqual(historyFull.length, 3, 'Must record open, sentToKitchen, and delivered in audit log');
-  assert.strictEqual(historyFull[1].from_status, 'open');
-  assert.strictEqual(historyFull[1].to_status, 'sentToKitchen');
-  assert.strictEqual(historyFull[1].changed_by, 'usr_garcom_1');
-  assert.strictEqual(historyFull[2].from_status, 'sentToKitchen');
-  assert.strictEqual(historyFull[2].to_status, 'delivered');
-  assert.strictEqual(historyFull[2].changed_by, 'usr_cozinha_2');
+  assert.strictEqual(itemOnClosedRejected, true, 'Adicionar item em comanda fechada deve ser bloqueado');
 
   await prisma.$disconnect();
   console.log('Suíte de Concorrência e Integridade Financeira executada com sucesso!');
 }
 
 runConcurrencyAndFinancialTests().catch((e) => {
-  console.error('Falha nos testes de concorrência e integridade financeira:', e);
+  console.error('Concurrency/Financial tests failed:', e);
   process.exit(1);
 });

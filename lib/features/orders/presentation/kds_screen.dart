@@ -67,12 +67,12 @@ class _KdsScreenState extends ConsumerState<KdsScreen> {
   }
 
   Future<void> _updateStatus(
-      String orderId, String targetStatus, String label) async {
+      Order order, String targetStatus, String label) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
       await ref
           .read(ordersRepositoryProvider)
-          .updateOrderStatus(orderId: orderId, status: targetStatus);
+          .updateOrderStatus(orderId: order.id, status: targetStatus, expectedVersion: order.version);
       _invalidateAll();
     } catch (e) {
       if (!mounted) return;
@@ -298,7 +298,7 @@ class _KdsScreenState extends ConsumerState<KdsScreen> {
                                         minimumSize: const Size(0, 36),
                                       ),
                                       onPressed: isConnected
-                                          ? () => _updateStatus(order.id,
+                                          ? () => _updateStatus(order,
                                               targetStatus, primaryActionName)
                                           : null,
                                       icon: const Icon(Icons.arrow_forward,

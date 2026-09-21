@@ -146,11 +146,14 @@ class OrdersRepository {
     }
   }
 
-  Future<bool> closeOrder(String orderId) async {
+  Future<bool> closeOrder(String orderId, {int? expectedVersion}) async {
     try {
       final idempKey = 'idemp_close_${DateTime.now().microsecondsSinceEpoch}';
       final response = await _dio.post(
         '/orders/$orderId/close',
+        data: {
+          if (expectedVersion != null) 'expected_version': expectedVersion,
+        },
         options: Options(
           headers: {'X-Idempotency-Key': idempKey},
           extra: orderId.startsWith('temp_')

@@ -27,6 +27,11 @@ export class AddItemDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsInt({ message: 'expected_version deve ser um número inteiro' })
+  @Min(1)
+  expected_version?: number;
 }
 
 export class UpdateOrderStatusDto {
@@ -40,8 +45,24 @@ export class UpdateOrderStatusDto {
   expected_version?: number;
 }
 
+export class CloseOrderDto {
+  @IsOptional()
+  @IsInt({ message: 'expected_version deve ser um número inteiro' })
+  @Min(1)
+  expected_version?: number;
+}
+
 export class QueryOrdersDto {
   @IsOptional()
   @IsString()
   status?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  limit?: number;
+
+  @IsOptional()
+  @IsString()
+  cursor?: string;
 }

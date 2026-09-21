@@ -14,10 +14,12 @@ import {
 } from '@nestjs/common';
 import * as crypto from 'node:crypto';
 import { AuthGuard } from './auth.guard';
-import { AddItemDto, CreateOrderDto, QueryOrdersDto, UpdateOrderStatusDto } from './dto/orders.dto';
+import { AddItemDto, CloseOrderDto, CreateOrderDto, QueryOrdersDto, UpdateOrderStatusDto } from './dto/orders.dto';
 import { OrdersGateway } from './orders.gateway';
 import { PrismaService } from './prisma.service';
 import { TenantGuard } from './tenant.guard';
+import { Roles } from './roles.decorator';
+import { RolesGuard } from './roles.guard';
 
 interface RequestContext {
   tenantId: string;
@@ -34,7 +36,7 @@ function computePayloadHash(payload: unknown): string {
   return crypto.createHash('sha256').update(JSON.stringify(payload ?? {})).digest('hex');
 }
 
-@UseGuards(AuthGuard, TenantGuard)
+@UseGuards(AuthGuard, TenantGuard, RolesGuard)
 @Controller('v1/orders')
 export class OrdersController {
   constructor(
@@ -86,17 +88,36 @@ export class OrdersController {
       statuses = query.status.split(',').map((s) => s.trim()).filter(Boolean);
     }
 
+    const take = Math.min(Math.max(Number(query?.limit ?? 30), 1), 100);
+    const cursor = query?.cursor;
+
     const orders = await this.prisma.order.findMany({
       where: {
         tenantId: req.tenantId,
         ...(statuses && statuses.length ? { status: { in: statuses } } : {}),
       },
-      include: { items: true, history: { orderBy: { changed_at: 'asc' } } },
+      take: take + 1,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      include: { items: true },
       orderBy: { opened_at: 'desc' },
     });
-    return { data: orders };
+
+    let nextCursor: string | null = null;
+    if (orders.length > take) {
+      const nextItem = orders.pop();
+      nextCursor = nextItem?.id ?? null;
+    }
+
+    return {
+      data: orders,
+      pagination: {
+        limit: take,
+        next_cursor: nextCursor,
+      },
+    };
   }
 
+  @Roles('waiter', 'cashier', 'manager')
   @Post()
   async createOrder(@Request() req: RequestContext, @Body() body: CreateOrderDto) {
     const rawKey = req.headers['x-idempotency-key'];
@@ -144,6 +165,7 @@ export class OrdersController {
     return order;
   }
 
+  @Roles('kitchen', 'cashier', 'manager')
   @Patch(':id/status')
   async updateOrderStatus(
     @Request() req: RequestContext,
@@ -222,6 +244,7 @@ export class OrdersController {
     return updated;
   }
 
+  @Roles('waiter', 'cashier', 'manager')
   @Post(':id/items')
   async addItem(@Request() req: RequestContext, @Param('id') id: string, @Body() body: AddItemDto) {
     const rawKey = req.headers['x-idempotency-key'];
@@ -230,17 +253,9 @@ export class OrdersController {
     const cached = await this.checkIdempotency(req.tenantId, key, body);
     if (cached) return cached;
 
-    const order = await this.prisma.order.findFirst({
-      where: { id, tenantId: req.tenantId },
-    });
-    if (!order) throw new NotFoundException('Comanda não encontrada');
-    if (order.status === 'closed' || order.status === 'canceled') {
-      throw new BadRequestException('Não é possível adicionar itens em comanda finalizada');
-    }
-
     const rawQuantity = body.quantity;
     let productName = typeof body.product_name === 'string' ? body.product_name.trim() : '';
-    let unitPriceCents = body.unit_price_cents ?? 2000;
+    let unitPriceCents = body.unit_price_cents;
 
     if (typeof body.product_id === 'string' && body.product_id.trim()) {
       const product = await this.prisma.product.findFirst({
@@ -255,9 +270,40 @@ export class OrdersController {
       throw new BadRequestException('Produto é obrigatório');
     }
 
+    if (unitPriceCents === undefined) {
+      throw new BadRequestException('Preço unitário em centavos é obrigatório quando produto não é vinculado');
+    }
+
     const notes = typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim() : undefined;
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      const whereClause: any = {
+        id,
+        tenantId: req.tenantId,
+        status: 'open',
+      };
+
+      if (body.expected_version !== undefined) {
+        whereClause.version = body.expected_version;
+      }
+
+      const orderUpdate = await tx.order.updateMany({
+        where: whereClause,
+        data: { version: { increment: 1 } },
+      });
+
+      if (orderUpdate.count === 0) {
+        const existing = await tx.order.findFirst({ where: { id, tenantId: req.tenantId } });
+        if (!existing) throw new NotFoundException('Comanda não encontrada');
+        if (existing.status !== 'open') {
+          throw new BadRequestException('Não é possível adicionar itens em comanda finalizada ou em preparo');
+        }
+        if (body.expected_version !== undefined && existing.version !== body.expected_version) {
+          throw new ConflictException(`Conflito de concorrência: versão esperada ${body.expected_version}, atual ${existing.version}`);
+        }
+        throw new ConflictException('Falha de concorrência ao adicionar item');
+      }
+
       await tx.orderItem.create({
         data: {
           orderId: id,
@@ -266,11 +312,6 @@ export class OrdersController {
           unit_price_cents: unitPriceCents,
           notes,
         },
-      });
-
-      await tx.order.update({
-        where: { id },
-        data: { version: { increment: 1 } },
       });
 
       const fresh = await tx.order.findUniqueOrThrow({
@@ -286,44 +327,69 @@ export class OrdersController {
     return updated;
   }
 
+  @Roles('cashier', 'manager')
   @Post(':id/close')
-  async closeOrder(@Request() req: RequestContext, @Param('id') id: string) {
+  async closeOrder(@Request() req: RequestContext, @Param('id') id: string, @Body() body: CloseOrderDto) {
     const rawKey = req.headers['x-idempotency-key'];
     const key = Array.isArray(rawKey) ? rawKey[0] : rawKey;
 
-    const cached = await this.checkIdempotency(req.tenantId, key, {});
+    const cached = await this.checkIdempotency(req.tenantId, key, body);
     if (cached) return cached;
-
-    const order = await this.prisma.order.findFirst({
-      where: { id, tenantId: req.tenantId },
-      include: { items: true, history: { orderBy: { changed_at: 'asc' } } },
-    });
-    if (!order) throw new NotFoundException('Comanda não encontrada');
-    if (order.status === 'closed') return order;
-    if (order.status === 'canceled') {
-      throw new BadRequestException('Comanda cancelada não pode ser fechada');
-    }
 
     const userId = req.user?.sub;
 
     const updated = await this.prisma.$transaction(async (tx) => {
-      const closed = await tx.order.update({
-        where: { id },
+      const whereClause: any = {
+        id,
+        tenantId: req.tenantId,
+        status: { in: ['open', 'sentToKitchen', 'delivered'] },
+      };
+
+      if (body?.expected_version !== undefined) {
+        whereClause.version = body.expected_version;
+      }
+
+      const closeResult = await tx.order.updateMany({
+        where: whereClause,
         data: {
           status: 'closed',
           version: { increment: 1 },
-          history: {
-            create: {
-              from_status: order.status,
-              to_status: 'closed',
-              changed_by: userId,
-            },
-          },
         },
+      });
+
+      if (closeResult.count === 0) {
+        const existing = await tx.order.findFirst({
+          where: { id, tenantId: req.tenantId },
+          include: { items: true, history: { orderBy: { changed_at: 'asc' } } },
+        });
+        if (!existing) throw new NotFoundException('Comanda não encontrada');
+        if (existing.status === 'closed') {
+          return existing;
+        }
+        if (existing.status === 'canceled') {
+          throw new BadRequestException('Comanda cancelada não pode ser fechada');
+        }
+        if (body?.expected_version !== undefined && existing.version !== body.expected_version) {
+          throw new ConflictException(`Conflito de concorrência: versão esperada ${body.expected_version}, atual ${existing.version}`);
+        }
+        throw new ConflictException('Falha de concorrência ao fechar comanda');
+      }
+
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId: id,
+          from_status: null,
+          to_status: 'closed',
+          changed_by: userId,
+        },
+      });
+
+      const closed = await tx.order.findUniqueOrThrow({
+        where: { id },
         include: { items: true, history: { orderBy: { changed_at: 'asc' } } },
       });
 
-      await this.saveIdempotency(tx, req.tenantId, key, {}, closed);
+      await this.saveIdempotency(tx, req.tenantId, key, body, closed);
       return closed;
     });
 

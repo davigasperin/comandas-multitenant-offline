@@ -89,7 +89,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     setState(() => _isClosing = true);
     try {
       final confirmedServer =
-          await ref.read(ordersRepositoryProvider).closeOrder(order.id);
+          await ref.read(ordersRepositoryProvider).closeOrder(order.id, expectedVersion: order.version);
       _invalidateAll();
       scaffoldMessenger.showSnackBar(
         SnackBar(
