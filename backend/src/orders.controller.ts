@@ -1,17 +1,69 @@
-import { Body, Controller, Get, Param, Post, Query, Request, UseGuards, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Request,
+  UseGuards,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
+import * as crypto from 'crypto';
 import { AuthGuard } from './auth.guard';
 import { TenantGuard } from './tenant.guard';
 import { PrismaService } from './prisma.service';
+import { OrdersGateway } from './orders.gateway';
 
 interface RequestContext {
   tenantId: string;
   headers: Record<string, string | string[] | undefined>;
 }
 
+const VALID_TRANSITIONS: Record<string, string> = {
+  open: 'sentToKitchen',
+  sentToKitchen: 'delivered',
+};
+
+function computePayloadHash(payload: unknown): string {
+  return crypto.createHash('sha256').update(JSON.stringify(payload ?? {})).digest('hex');
+}
+
 @UseGuards(AuthGuard, TenantGuard)
 @Controller('v1/orders')
 export class OrdersController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ordersGateway: OrdersGateway,
+  ) {}
+
+  private async checkIdempotency(tenantId: string, key: string | undefined, payload: unknown) {
+    if (!key) return null;
+    const existing = await this.prisma.idempotencyKey.findUnique({
+      where: { tenantId_key: { tenantId, key } },
+    });
+    if (!existing) return null;
+    const currentHash = computePayloadHash(payload);
+    if (existing.requestHash && existing.requestHash !== currentHash) {
+      throw new ConflictException('Idempotency key reused with different payload');
+    }
+    return JSON.parse(existing.response);
+  }
+
+  private async saveIdempotency(tx: any, tenantId: string, key: string | undefined, payload: unknown, response: unknown) {
+    if (!key) return;
+    await tx.idempotencyKey.create({
+      data: {
+        tenantId,
+        key,
+        requestHash: computePayloadHash(payload),
+        response: JSON.stringify(response),
+      },
+    }).catch(() => {});
+  }
 
   @Get('products')
   async getProducts(@Request() req: RequestContext) {
@@ -45,14 +97,8 @@ export class OrdersController {
     const rawKey = req.headers['x-idempotency-key'];
     const key = Array.isArray(rawKey) ? rawKey[0] : rawKey;
 
-    if (key) {
-      const cached = await this.prisma.idempotencyKey.findUnique({
-        where: { tenantId_key: { tenantId: req.tenantId, key } },
-      });
-      if (cached) {
-        return JSON.parse(cached.response);
-      }
-    }
+    const cached = await this.checkIdempotency(req.tenantId, key, body);
+    if (cached) return cached;
 
     if (!body || typeof body.table_label !== 'string' || !body.table_label.trim()) {
       throw new BadRequestException('Mesa/Comanda é obrigatória');
@@ -70,18 +116,11 @@ export class OrdersController {
         include: { items: true },
       });
 
-      if (key) {
-        await tx.idempotencyKey.create({
-          data: {
-            tenantId: req.tenantId,
-            key,
-            response: JSON.stringify(order),
-          },
-        }).catch(() => {});
-      }
+      await this.saveIdempotency(tx, req.tenantId, key, body, order);
       return order;
     });
 
+    this.ordersGateway.emitToTenant(req.tenantId, 'order:created', created);
     return created;
   }
 
@@ -95,19 +134,74 @@ export class OrdersController {
     return order;
   }
 
+  @Patch(':id/status')
+  async updateOrderStatus(
+    @Request() req: RequestContext,
+    @Param('id') id: string,
+    @Body() body: { status: string },
+  ) {
+    const rawKey = req.headers['x-idempotency-key'];
+    const key = Array.isArray(rawKey) ? rawKey[0] : rawKey;
+
+    const cached = await this.checkIdempotency(req.tenantId, key, body);
+    if (cached) return cached;
+
+    const nextStatus = body?.status;
+    if (!nextStatus || typeof nextStatus !== 'string') {
+      throw new BadRequestException('Status é obrigatório');
+    }
+
+    const allowedPrevious = Object.entries(VALID_TRANSITIONS).find(([, target]) => target === nextStatus)?.[0];
+    if (!allowedPrevious) {
+      throw new BadRequestException(`Transição inválida para status ${nextStatus}`);
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.order.updateMany({
+        where: {
+          id,
+          tenantId: req.tenantId,
+          status: allowedPrevious,
+        },
+        data: {
+          status: nextStatus,
+        },
+      });
+
+      if (result.count === 0) {
+        const existing = await tx.order.findFirst({
+          where: { id, tenantId: req.tenantId },
+        });
+        if (!existing) throw new NotFoundException('Comanda não encontrada');
+        if (existing.status === nextStatus) {
+          return tx.order.findUniqueOrThrow({
+            where: { id },
+            include: { items: true },
+          });
+        }
+        throw new ConflictException(`Transição de ${existing.status} para ${nextStatus} não permitida`);
+      }
+
+      const fresh = await tx.order.findUniqueOrThrow({
+        where: { id },
+        include: { items: true },
+      });
+
+      await this.saveIdempotency(tx, req.tenantId, key, body, fresh);
+      return fresh;
+    });
+
+    this.ordersGateway.emitToTenant(req.tenantId, 'order:updated', updated);
+    return updated;
+  }
+
   @Post(':id/items')
   async addItem(@Request() req: RequestContext, @Param('id') id: string, @Body() body: any) {
     const rawKey = req.headers['x-idempotency-key'];
     const key = Array.isArray(rawKey) ? rawKey[0] : rawKey;
 
-    if (key) {
-      const cached = await this.prisma.idempotencyKey.findUnique({
-        where: { tenantId_key: { tenantId: req.tenantId, key } },
-      });
-      if (cached) {
-        return JSON.parse(cached.response);
-      }
-    }
+    const cached = await this.checkIdempotency(req.tenantId, key, body);
+    if (cached) return cached;
 
     const order = await this.prisma.order.findFirst({
       where: { id, tenantId: req.tenantId },
@@ -156,19 +250,11 @@ export class OrdersController {
         include: { items: true },
       });
 
-      if (key) {
-        await tx.idempotencyKey.create({
-          data: {
-            tenantId: req.tenantId,
-            key,
-            response: JSON.stringify(fresh),
-          },
-        }).catch(() => {});
-      }
-
+      await this.saveIdempotency(tx, req.tenantId, key, body, fresh);
       return fresh;
     });
 
+    this.ordersGateway.emitToTenant(req.tenantId, 'order:updated', updated);
     return updated;
   }
 
@@ -177,14 +263,8 @@ export class OrdersController {
     const rawKey = req.headers['x-idempotency-key'];
     const key = Array.isArray(rawKey) ? rawKey[0] : rawKey;
 
-    if (key) {
-      const cached = await this.prisma.idempotencyKey.findUnique({
-        where: { tenantId_key: { tenantId: req.tenantId, key } },
-      });
-      if (cached) {
-        return JSON.parse(cached.response);
-      }
-    }
+    const cached = await this.checkIdempotency(req.tenantId, key, {});
+    if (cached) return cached;
 
     const order = await this.prisma.order.findFirst({
       where: { id, tenantId: req.tenantId },
@@ -203,19 +283,11 @@ export class OrdersController {
         include: { items: true },
       });
 
-      if (key) {
-        await tx.idempotencyKey.create({
-          data: {
-            tenantId: req.tenantId,
-            key,
-            response: JSON.stringify(closed),
-          },
-        }).catch(() => {});
-      }
-
+      await this.saveIdempotency(tx, req.tenantId, key, {}, closed);
       return closed;
     });
 
+    this.ordersGateway.emitToTenant(req.tenantId, 'order:updated', updated);
     return updated;
   }
 }

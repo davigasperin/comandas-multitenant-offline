@@ -68,11 +68,12 @@ model OrderItem {
 }
 
 model IdempotencyKey {
-  key       String
-  tenantId  String
-  response  String
-  createdAt DateTime @default(now())
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  key         String
+  tenantId    String
+  response    String
+  requestHash String?
+  createdAt   DateTime @default(now())
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@id([tenantId, key])
 }
