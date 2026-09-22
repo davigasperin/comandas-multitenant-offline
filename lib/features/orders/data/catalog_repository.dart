@@ -7,29 +7,92 @@ class CatalogRepository {
 
   Future<List<CatalogCategory>> categories() async {
     final response = await dio.get('/categories', queryParameters: {'all': true});
-    return (response.data['data'] as List).map((e) => CatalogCategory.fromJson(Map<String, dynamic>.from(e))).toList();
+    return (response.data['data'] as List)
+        .map((e) => CatalogCategory.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
   }
 
   Future<List<CatalogProduct>> products() async {
     final response = await dio.get('/products', queryParameters: {'all': true});
-    return (response.data['data'] as List).map((e) => CatalogProduct.fromJson(Map<String, dynamic>.from(e))).toList();
+    return (response.data['data'] as List)
+        .map((e) => CatalogProduct.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
   }
 
   Future<List<DiningTableModel>> tables() async {
     final response = await dio.get('/tables');
-    return (response.data['data'] as List).map((e) => DiningTableModel.fromJson(Map<String, dynamic>.from(e))).toList();
+    return (response.data['data'] as List)
+        .map((e) => DiningTableModel.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
   }
 
-  Future<void> save(String resource, Map<String, dynamic> data, {String? id}) async {
-    final options = Options(extra: {'skipOfflineQueue': true});
-    if (id == null) {
-      await dio.post('/$resource', data: data, options: options);
-    } else {
-      await dio.patch('/$resource/$id', data: data, options: options);
-    }
+  Future<void> createProduct({
+    required String name,
+    required int priceCents,
+    String? categoryId,
+    bool available = true,
+    int sortOrder = 0,
+  }) {
+    return dio.post(
+      '/products',
+      data: {
+        'name': name,
+        'price_cents': priceCents,
+        if (categoryId != null) 'category_id': categoryId,
+        'available': available,
+        'sort_order': sortOrder,
+      },
+      options: Options(extra: {'skipOfflineQueue': true}),
+    );
   }
 
-  Future<void> disable(String resource, String id) async {
-    await dio.delete('/$resource/$id', options: Options(extra: {'skipOfflineQueue': true}));
+  Future<void> updateProduct({
+    required String id,
+    required String name,
+    required int priceCents,
+    String? categoryId,
+    required bool available,
+    required int sortOrder,
+    bool? active,
+  }) {
+    return dio.patch(
+      '/products/$id',
+      data: {
+        'name': name,
+        'price_cents': priceCents,
+        'category_id': categoryId,
+        'available': available,
+        'sort_order': sortOrder,
+        if (active != null) 'active': active,
+      },
+      options: Options(extra: {'skipOfflineQueue': true}),
+    );
+  }
+
+  Future<void> setProductAvailability(String id, bool available) {
+    return dio.patch(
+      '/products/$id',
+      data: {'available': available},
+      options: Options(extra: {'skipOfflineQueue': true}),
+    );
+  }
+
+  Future<void> deleteProduct(String id) {
+    return dio.delete(
+      '/products/$id',
+      options: Options(extra: {'skipOfflineQueue': true}),
+    );
+  }
+
+  Future<void> restoreProduct(CatalogProduct product) {
+    return updateProduct(
+      id: product.id,
+      name: product.name,
+      priceCents: product.priceCents,
+      categoryId: product.categoryId,
+      available: product.available,
+      sortOrder: product.sortOrder,
+      active: true,
+    );
   }
 }
