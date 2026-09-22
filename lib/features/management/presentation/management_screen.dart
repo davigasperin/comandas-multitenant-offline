@@ -169,7 +169,7 @@ class _ManagementScreenState extends ConsumerState<ManagementScreen> {
         const SizedBox(height: 12),
         ...cards.map((card) => Card(
               child: ListTile(
-                leading: CircleAvatar(backgroundColor: card.$3.withOpacity(.15), child: Icon(Icons.attach_money, color: card.$3)),
+                leading: CircleAvatar(backgroundColor: card.$3.withValues(alpha: .15), child: Icon(Icons.attach_money, color: card.$3)),
                 title: Text(card.$1),
                 trailing: Text(
                   BrlCurrency.formatCents((_margin[card.$2] as num?)?.toInt() ?? 0),

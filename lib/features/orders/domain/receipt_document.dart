@@ -24,7 +24,7 @@ class ReceiptDocument {
     pdf.addPage(
       pw.Page(
         pageFormat: paperWidthMm == 58
-            ? PdfPageFormat(58 * PdfPageFormat.mm, double.infinity)
+            ? const PdfPageFormat(58 * PdfPageFormat.mm, double.infinity)
             : PdfPageFormat.roll80,
         margin: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 12),
         build: (pw.Context context) {
