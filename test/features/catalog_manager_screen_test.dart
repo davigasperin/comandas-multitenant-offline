@@ -43,7 +43,7 @@ void main() {
 
     expect(find.text('Catálogo e mesas'), findsOneWidget);
     expect(find.text('Suco Natural'), findsOneWidget);
-    expect(find.text('R\$ 12.00'), findsOneWidget);
+    expect(find.text('R\$ 12,00'), findsOneWidget);
     expect(find.text('Mesa 01'), findsOneWidget);
   });
 }
