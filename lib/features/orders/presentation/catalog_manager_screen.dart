@@ -102,44 +102,6 @@ class _CatalogManagerScreenState extends ConsumerState<CatalogManagerScreen> {
     await ref.read(catalogRepositoryProvider).restoreProduct(product);
     ref.invalidate(catalogDataProvider);
   }
-    final name = TextEditingController(text: product.name);
-    final price = TextEditingController(text: (product.priceCents / 100).toStringAsFixed(2).replaceAll('.', ','));
-    final formKey = GlobalKey<FormState>();
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Editar produto'),
-        content: Form(
-          key: formKey,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextFormField(controller: name, decoration: const InputDecoration(labelText: 'Nome'), validator: (v) => v == null || v.trim().isEmpty ? 'Informe o nome' : null),
-            TextFormField(
-              controller: price,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Preço (R\$)', hintText: 'Ex.: 10,86'),
-              validator: (v) { try { BrlCurrency.parseToCents(v ?? ''); return null; } on FormatException catch (e) { return e.message; } },
-            ),
-          ]),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancelar')),
-          ElevatedButton(onPressed: () async {
-            if (!formKey.currentState!.validate()) return;
-            await ref.read(catalogRepositoryProvider).updateProduct(
-              id: product.id,
-              name: name.text.trim(),
-              priceCents: BrlCurrency.parseToCents(price.text),
-              categoryId: product.categoryId,
-              available: product.available,
-              sortOrder: product.sortOrder,
-            );
-            if (dialogContext.mounted) Navigator.pop(dialogContext, true);
-          }, child: const Text('Salvar')),
-        ],
-      ),
-    );
-    if (result == true) ref.invalidate(catalogDataProvider);
-  }
 
   Future<void> _newProduct(List<CatalogCategory> categories) async {
     final name = TextEditingController();
