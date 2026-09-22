@@ -152,6 +152,15 @@ void main() {
 
     expect(find.text('PIX'), findsOneWidget);
 
+    final amountInputs = find.widgetWithText(TextField, 'Valor (R\$)');
+    expect(amountInputs, findsNWidgets(2));
+
+    await tester.enterText(amountInputs.at(0), '30,00');
+    await tester.pumpAndSettle();
+
+    await tester.enterText(amountInputs.at(1), '25,00');
+    await tester.pumpAndSettle();
+
     final confirmBtn =
         find.widgetWithText(ElevatedButton, 'Confirmar Pagamento');
     await tester.ensureVisible(confirmBtn);
@@ -163,5 +172,11 @@ void main() {
     expect(capturedBody!['discount_cents'], 0);
     expect(capturedBody!['service_fee_bps'], 1000);
     expect(capturedBody!['expected_version'], 3);
+    final payments = capturedBody!['payments'] as List<dynamic>;
+    expect(payments, hasLength(2));
+    expect(payments[0]['method'], 'cash');
+    expect(payments[0]['amount_cents'], 3000);
+    expect(payments[1]['method'], 'pix');
+    expect(payments[1]['amount_cents'], 2500);
   });
 }

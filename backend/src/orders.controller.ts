@@ -391,7 +391,7 @@ export class OrdersController {
       const whereClause: any = {
         id,
         tenantId: req.tenantId,
-        status: 'open',
+        status: { not: 'closed' },
       };
 
       if (body.expected_version !== undefined) {
@@ -406,8 +406,8 @@ export class OrdersController {
       if (orderUpdate.count === 0) {
         const existing = await tx.order.findFirst({ where: { id, tenantId: req.tenantId } });
         if (!existing) throw new NotFoundException('Comanda não encontrada');
-        if (existing.status !== 'open') {
-          throw new BadRequestException('Não é possível adicionar itens em comanda finalizada ou em preparo');
+        if (existing.status === 'closed') {
+          throw new BadRequestException('Não é possível adicionar itens em comanda fechada');
         }
         if (body.expected_version !== undefined && existing.version !== body.expected_version) {
           throw new ConflictException(`Conflito de concorrência: versão esperada ${body.expected_version}, atual ${existing.version}`);

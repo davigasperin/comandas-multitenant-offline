@@ -114,7 +114,7 @@ class OrdersRepository {
         data: {
           'product_id': productId,
           'quantity': quantity,
-          'notes': notes,
+          if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
         },
         options: Options(
           headers: {'X-Idempotency-Key': idempKey},

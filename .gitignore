@@ -26,3 +26,9 @@ backend/*.db
 backend/*.db-journal
 # Widget Preview related
 .widget_preview/
+
+# Local bundle & offline setup helpers
+historico/
+preparar-local.cjs
+LEIA-ME-TESTE-LOCAL.md
+
