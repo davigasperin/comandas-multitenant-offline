@@ -103,8 +103,46 @@ class OrderItem extends Equatable {
       );
 
   @override
-  List<Object?> get props =>
-      [id, productName, quantity, unitPriceCents, notes];
+  List<Object?> get props => [id, productName, quantity, unitPriceCents, notes];
+}
+
+class SettlementPreview extends Equatable {
+  final int subtotalCents;
+  final int discountCents;
+  final int serviceFeeBps;
+  final int serviceFeeCents;
+  final int totalCents;
+
+  const SettlementPreview({
+    required this.subtotalCents,
+    required this.discountCents,
+    required this.serviceFeeBps,
+    required this.serviceFeeCents,
+    required this.totalCents,
+  });
+
+  double get subtotal => subtotalCents / 100.0;
+  double get discount => discountCents / 100.0;
+  double get serviceFee => serviceFeeCents / 100.0;
+  double get total => totalCents / 100.0;
+
+  factory SettlementPreview.fromJson(Map<String, dynamic> json) =>
+      SettlementPreview(
+        subtotalCents: (json['subtotal_cents'] as num?)?.toInt() ?? 0,
+        discountCents: (json['discount_cents'] as num?)?.toInt() ?? 0,
+        serviceFeeBps: (json['service_fee_bps'] as num?)?.toInt() ?? 1000,
+        serviceFeeCents: (json['service_fee_cents'] as num?)?.toInt() ?? 0,
+        totalCents: (json['total_cents'] as num?)?.toInt() ?? 0,
+      );
+
+  @override
+  List<Object?> get props => [
+        subtotalCents,
+        discountCents,
+        serviceFeeBps,
+        serviceFeeCents,
+        totalCents,
+      ];
 }
 
 class Order extends Equatable {

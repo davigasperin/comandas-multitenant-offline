@@ -8,6 +8,8 @@ import { PrismaModule } from './prisma.module';
 import { AuthService } from './auth.service';
 import { validateJwtSecret } from './config.utils';
 
+import { CatalogController } from './catalog.controller';
+
 @Module({
   imports: [
     PrismaModule,
@@ -18,7 +20,7 @@ import { validateJwtSecret } from './config.utils';
       signOptions: { expiresIn: '15m' },
     }),
   ],
-  controllers: [AppController, OrdersController],
+  controllers: [AppController, OrdersController, CatalogController],
   providers: [AuthService, OrdersGateway],
 })
 export class AppModule {}

@@ -7,6 +7,7 @@ import '../../../core/network/providers.dart';
 import '../domain/order_model.dart';
 import '../domain/product_model.dart';
 import 'orders_screen.dart';
+import 'settlement_screen.dart';
 
 final orderDetailProvider =
     FutureProvider.autoDispose.family<Order, String>((ref, orderId) {
@@ -27,7 +28,6 @@ class OrderDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
-  bool _isClosing = false;
   bool _isAddingItem = false;
   bool _isPrinting = false;
 
@@ -55,58 +55,19 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     }
   }
 
-  Future<void> _confirmCloseOrder(BuildContext hostContext, Order order) async {
-    final currency = NumberFormat.simpleCurrency(locale: 'pt_BR');
-    final confirmed = await showDialog<bool>(
-      context: hostContext,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Fechar comanda?'),
-          content: Text(
-            'Confirmar fechamento da ${order.tableLabel} no valor de ${currency.format(order.total)}?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(dialogContext).colorScheme.error,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Fechar'),
-            ),
-          ],
-        );
-      },
+  Future<void> _navigateToSettlement(Order order) async {
+    final settled = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => SettlementScreen(order: order),
+      ),
     );
-
-    if (confirmed != true || !mounted) return;
-
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-    setState(() => _isClosing = true);
-    try {
-      final confirmedServer =
-          await ref.read(ordersRepositoryProvider).closeOrder(order.id, expectedVersion: order.version);
+    if (settled == true && mounted) {
       _invalidateAll();
-      scaffoldMessenger.showSnackBar(
-        SnackBar(
-          content: Text(confirmedServer
-              ? '${order.tableLabel} fechada com sucesso.'
-              : '${order.tableLabel} fechamento colocado na fila offline (pendente).'),
-        ),
-      );
-    } catch (err) {
-      scaffoldMessenger.showSnackBar(
-        SnackBar(content: Text('Erro ao fechar comanda: $err')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isClosing = false);
-      }
     }
+  }
+
+  Future<void> _confirmCloseOrder(BuildContext hostContext, Order order) async {
+    await _navigateToSettlement(order);
   }
 
   Future<void> _showAddProductSheet() async {
@@ -421,9 +382,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                           style: OutlinedButton.styleFrom(
                             minimumSize: const Size.fromHeight(48),
                           ),
-                          onPressed: _isAddingItem || _isClosing
-                              ? null
-                              : _showAddProductSheet,
+                          onPressed:
+                              _isAddingItem ? null : _showAddProductSheet,
                           icon: _isAddingItem
                               ? const SizedBox(
                                   width: 16,
@@ -445,19 +405,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                               : Theme.of(context).colorScheme.error,
                           foregroundColor: Colors.white,
                         ),
-                        onPressed: isClosed || _isClosing || _isAddingItem
+                        onPressed: isClosed || _isAddingItem
                             ? null
                             : () => _confirmCloseOrder(context, order),
-                        child: _isClosing
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : Text(isClosed ? 'Fechada' : 'Fechar'),
+                        child: Text(isClosed ? 'Fechada' : 'Fechar'),
                       ),
                     ),
                   ],

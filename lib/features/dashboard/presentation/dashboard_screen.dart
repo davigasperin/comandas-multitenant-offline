@@ -6,6 +6,7 @@ import '../../auth/presentation/login_screen.dart';
 import '../../orders/presentation/orders_screen.dart';
 import '../../orders/presentation/kds_screen.dart';
 import '../../tenant/presentation/tenant_switch_screen.dart';
+import '../../orders/presentation/catalog_manager_screen.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -116,6 +117,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               icon: const Icon(Icons.view_kanban_outlined),
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const KdsScreen()),
+              ),
+            ),
+            if (role == 'manager') IconButton(
+              tooltip: 'Catálogo e Mesas',
+              icon: const Icon(Icons.table_restaurant),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const CatalogManagerScreen()),
               ),
             ),
             IconButton(

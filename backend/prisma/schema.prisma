@@ -8,63 +8,114 @@ datasource db {
 }
 
 model User {
-  id        String       @id @default(cuid())
-  name      String
-  email     String       @unique
-  password  String
-  tenants   UserTenant[]
+  id            String         @id @default(cuid())
+  name          String
+  email         String         @unique
+  password      String
+  tenants       UserTenant[]
   refreshTokens RefreshToken[]
-  createdAt DateTime     @default(now())
+  createdAt     DateTime       @default(now())
 }
 
 model Tenant {
-  id          String       @id @default(cuid())
+  id          String         @id @default(cuid())
   name        String
   role        String
   logo_url    String?
   users       UserTenant[]
+  categories  Category[]
   products    Product[]
+  tables      DiningTable[]
   orders      Order[]
   idempotency IdempotencyKey[]
-  createdAt   DateTime     @default(now())
+  createdAt   DateTime       @default(now())
 }
 
 model UserTenant {
-  userId    String
-  tenantId  String
-  role      String
-  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId   String
+  tenantId String
+  role     String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@id([userId, tenantId])
   @@index([tenantId])
 }
 
+model Category {
+  id              String         @id @default(cuid())
+  tenantId        String
+  name            String
+  sort_order      Int            @default(0)
+  active          Boolean        @default(true)
+  production_area String         @default("kitchen") // kitchen, bar, dessert, none
+  tenant          Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products        Product[]
+  createdAt       DateTime       @default(now())
+
+  @@index([tenantId, active])
+}
+
 model Product {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   tenantId    String
+  categoryId  String?
   name        String
   price_cents Int
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
+  active      Boolean   @default(true)
+  available   Boolean   @default(true)
+  sort_order  Int       @default(0)
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
 
-  @@index([tenantId])
+  @@index([tenantId, active])
+  @@index([categoryId])
+}
+
+model DiningTable {
+  id         String   @id @default(cuid())
+  tenantId   String
+  label      String
+  capacity   Int      @default(4)
+  position_x Int      @default(0)
+  position_y Int      @default(0)
+  width      Int      @default(120)
+  height     Int      @default(120)
+  shape      String   @default("square") // square, rectangle, circle
+  active     Boolean  @default(true)
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orders     Order[]
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, active])
 }
 
 model Order {
-  id          String               @id @default(cuid())
-  tenantId    String
-  table_label String
-  status      String               @default("open")
-  version     Int                  @default(1)
-  opened_at   DateTime             @default(now())
-  updated_at  DateTime             @default(now()) @updatedAt
-  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  items       OrderItem[]
-  history     OrderStatusHistory[]
+  id                String               @id @default(cuid())
+  tenantId          String
+  tableId           String?
+  table_label       String
+  status            String               @default("open")
+  version           Int                  @default(1)
+  subtotal_cents    Int                  @default(0)
+  discount_cents    Int                  @default(0)
+  service_fee_bps   Int                  @default(1000)
+  service_fee_cents Int                  @default(0)
+  total_cents       Int                  @default(0)
+  settled_at        DateTime?
+  settled_by        String?
+  opened_at         DateTime             @default(now())
+  updated_at        DateTime             @default(now()) @updatedAt
+  tenant            Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  table             DiningTable?         @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  items             OrderItem[]
+  payments          OrderPayment[]
+  history           OrderStatusHistory[]
 
   @@index([tenantId, status])
   @@index([tenantId, opened_at])
+  @@index([tableId])
 }
 
 model OrderItem {
@@ -79,14 +130,27 @@ model OrderItem {
   @@index([orderId])
 }
 
-model OrderStatusHistory {
+model OrderPayment {
   id             String   @id @default(cuid())
   orderId        String
-  from_status    String?
-  to_status      String
-  changed_by     String?
-  changed_at     DateTime @default(now())
+  method         String   // cash, pix, credit, debit, voucher
+  amount_cents   Int
+  tendered_cents Int?
+  change_cents   Int      @default(0)
+  created_at     DateTime @default(now())
   order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+model OrderStatusHistory {
+  id          String   @id @default(cuid())
+  orderId     String
+  from_status String?
+  to_status   String
+  changed_by  String?
+  changed_at  DateTime @default(now())
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
 }
@@ -94,12 +158,12 @@ model OrderStatusHistory {
 model IdempotencyKey {
   key          String
   tenantId     String
-  status       String   @default("completed")
+  status       String    @default("completed")
   response     String?
   requestHash  String?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
   completed_at DateTime?
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@id([tenantId, key])
 }

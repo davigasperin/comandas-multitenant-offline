@@ -56,7 +56,14 @@ class OfflineInterceptor extends Interceptor {
       handler.next(err);
       return;
     }
+    final queueableMutation = const <String>[
+      '/orders',
+    ].contains(request.path) ||
+        RegExp(r'^/orders/[a-zA-Z0-9_-]+/(items|status|close)$')
+            .hasMatch(request.path);
     if (_isTransient(err.type) &&
+        queueableMutation &&
+        !request.path.endsWith('/settle') &&
         const ['POST', 'PATCH', 'PUT', 'DELETE'].contains(request.method)) {
       final tenantId = request.headers['X-Tenant-Id']?.toString();
       final userId = request.extra['owner']?.toString();

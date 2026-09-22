@@ -15,7 +15,8 @@ import {
 import * as crypto from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { AuthGuard } from './auth.guard';
-import { AddItemDto, CloseOrderDto, CreateOrderDto, QueryOrdersDto, UpdateOrderStatusDto } from './dto/orders.dto';
+import { AddItemDto, CloseOrderDto, CreateOrderDto, QueryOrdersDto, SettleOrderDto, UpdateOrderStatusDto } from './dto/orders.dto';
+import { calculateBillTotals, validatePaymentsTotal } from './financial.utils';
 import { OrdersGateway } from './orders.gateway';
 import { PrismaService } from './prisma.service';
 import { TenantGuard } from './tenant.guard';
@@ -183,27 +184,57 @@ export class OrdersController {
   @Roles('waiter', 'cashier', 'manager')
   @Post()
   async createOrder(@Request() req: RequestContext, @Body() body: CreateOrderDto) {
-    const tableLabel = body.table_label.trim();
+    let tableLabel = body.table_label.trim();
     const userId = req.user?.sub;
+    let diningTableId: string | null = null;
+
+    if (body.table_id) {
+      const table = await this.prisma.diningTable.findFirst({
+        where: { id: body.table_id, tenantId: req.tenantId, active: true },
+      });
+      if (!table) throw new NotFoundException('Mesa selecionada não encontrada ou inativa');
+      diningTableId = table.id;
+      if (!tableLabel) tableLabel = table.label;
+    }
 
     const result = await this.executeIdempotent(req, 'POST /v1/orders', body, async (tx) => {
-      return tx.order.create({
-        data: {
-          tenantId: req.tenantId,
-          table_label: tableLabel,
-          status: 'open',
-          version: 1,
-          history: {
-            create: {
-              from_status: null,
-              to_status: 'open',
-              changed_by: userId,
+      if (diningTableId) {
+        const activeOrderOnTable = await tx.order.findFirst({
+          where: {
+            tenantId: req.tenantId,
+            tableId: diningTableId,
+            status: { notIn: ['closed', 'canceled'] },
+          },
+        });
+        if (activeOrderOnTable) {
+          throw new ConflictException(`Mesa "${tableLabel}" já possui uma comanda ativa`);
+        }
+      }
+
+      try {
+        return await tx.order.create({
+          data: {
+            tenantId: req.tenantId,
+            tableId: diningTableId,
+            table_label: tableLabel,
+            status: 'open',
+            version: 1,
+            history: {
+              create: {
+                from_status: null,
+                to_status: 'open',
+                changed_by: userId,
+              },
             },
           },
-        },
-        include: { items: true, history: true },
-      });
-
+          include: { items: true, history: true },
+        });
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          throw new ConflictException(`Mesa "${tableLabel}" já está ocupada`);
+        }
+        throw error;
+      }
     });
 
     if (!result.replayed) this.ordersGateway.emitToTenant(req.tenantId, 'order:created', result.value);
@@ -317,8 +348,11 @@ export class OrdersController {
         where: { id: body.product_id, tenantId: req.tenantId },
       });
       if (!product) throw new NotFoundException('Produto não encontrado');
+      if (!product.active || !product.available) {
+        throw new BadRequestException('Produto inativo ou indisponível não pode ser adicionado ao pedido');
+      }
       productName = product.name;
-      unitPriceCents = product.price_cents;
+      unitPriceCents = product.price_cents; // Preço canônico do servidor
     }
 
     if (!productName) {
@@ -382,48 +416,181 @@ export class OrdersController {
     return updated;
   }
 
+  private async settlementPreview(tenantId: string, id: string, discountCents = 0, serviceFeeBps = 1000) {
+    const order = await this.prisma.order.findFirst({
+      where: { id, tenantId },
+      include: { items: true },
+    });
+    if (!order) throw new NotFoundException('Comanda não encontrada');
+    const subtotalCents = order.items.reduce((total, item) => total + item.quantity * item.unit_price_cents, 0);
+    return calculateBillTotals({ subtotalCents, discountCents, serviceFeeBps });
+  }
+
+  @Roles('cashier', 'manager')
+  @Post(':id/settlement-preview')
+  async previewSettlement(@Request() req: RequestContext, @Param('id') id: string, @Body() body: Partial<SettleOrderDto>) {
+    const totals = await this.settlementPreview(req.tenantId, id, body.discount_cents ?? 0, body.service_fee_bps ?? 1000);
+    return {
+      subtotal_cents: totals.subtotalCents,
+      discount_cents: totals.discountCents,
+      discounted_subtotal_cents: totals.discountedSubtotalCents,
+      service_fee_bps: totals.serviceFeeBps,
+      service_fee_cents: totals.serviceFeeCents,
+      total_cents: totals.totalCents,
+    };
+  }
+
+  @Roles('cashier', 'manager')
+  @Post(':id/settle')
+  async settleOrder(@Request() req: RequestContext, @Param('id') id: string, @Body() body: SettleOrderDto) {
+    const result = await this.executeIdempotent(req, 'POST /v1/orders/:id/settle', { id, ...body }, async (tx) => {
+      const order = await tx.order.findFirst({
+        where: { id, tenantId: req.tenantId },
+        include: { items: true, payments: true },
+      });
+      if (!order) throw new NotFoundException('Comanda não encontrada');
+      if (order.status === 'closed') {
+        if (order.payments.length === 0) throw new ConflictException('Comanda histórica fechada sem pagamentos não pode ser reliquidada');
+        return tx.order.findUniqueOrThrow({ where: { id }, include: { items: true, payments: true, history: { orderBy: { changed_at: 'asc' } } } });
+      }
+      if (order.status === 'canceled') throw new BadRequestException('Comanda cancelada não pode ser liquidada');
+      if (body.expected_version !== undefined && order.version !== body.expected_version) {
+        throw new ConflictException(`Conflito de concorrência: versão esperada ${body.expected_version}, atual ${order.version}`);
+      }
+
+      const subtotalCents = order.items.reduce((total, item) => total + item.quantity * item.unit_price_cents, 0);
+      const totals = calculateBillTotals({
+        subtotalCents,
+        discountCents: body.discount_cents ?? 0,
+        serviceFeeBps: body.service_fee_bps ?? 1000,
+      });
+      const paymentCheck = validatePaymentsTotal(totals.totalCents, body.payments.map((payment) => ({
+        method: payment.method as any,
+        amountCents: payment.amount_cents,
+        tenderedCents: payment.tendered_cents,
+      })));
+
+      const closed = await tx.order.updateMany({
+        where: { id, tenantId: req.tenantId, status: { in: ['open', 'sentToKitchen', 'delivered'] }, version: order.version },
+        data: {
+          status: 'closed', version: { increment: 1 }, subtotal_cents: totals.subtotalCents,
+          discount_cents: totals.discountCents, service_fee_bps: totals.serviceFeeBps,
+          service_fee_cents: totals.serviceFeeCents, total_cents: totals.totalCents,
+          settled_at: new Date(), settled_by: req.user?.sub,
+          tableId: null, // Libera a ocupação da mesa atomicamente
+        },
+      });
+      if (closed.count !== 1) throw new ConflictException('Falha de concorrência ao liquidar comanda');
+
+      await tx.orderPayment.createMany({
+        data: paymentCheck.payments.map((payment) => ({
+          orderId: id, method: payment.method, amount_cents: payment.amountCents,
+          tendered_cents: payment.tenderedCents, change_cents: payment.changeCents,
+        })),
+      });
+      await tx.orderStatusHistory.create({ data: { orderId: id, from_status: order.status, to_status: 'closed', changed_by: req.user?.sub } });
+      return tx.order.findUniqueOrThrow({ where: { id }, include: { items: true, payments: true, history: { orderBy: { changed_at: 'asc' } } } });
+    });
+    if (!result.replayed) this.ordersGateway.emitToTenant(req.tenantId, 'order:updated', result.value);
+    return result.value;
+  }
+
+  @Roles('waiter', 'cashier', 'manager')
+  @Post(':id/transfer')
+  async transferTable(
+    @Request() req: RequestContext,
+    @Param('id') id: string,
+    @Body() body: { target_table_id: string },
+  ) {
+    const targetTableId = body.target_table_id;
+    if (!targetTableId) {
+      throw new BadRequestException('target_table_id é obrigatório');
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findFirst({
+        where: { id, tenantId: req.tenantId },
+      });
+      if (!order) throw new NotFoundException('Comanda não encontrada');
+      if (['closed', 'canceled'].includes(order.status)) {
+        throw new BadRequestException('Comanda finalizada não pode ser transferida');
+      }
+
+      const targetTable = await tx.diningTable.findFirst({
+        where: { id: targetTableId, tenantId: req.tenantId, active: true },
+      });
+      if (!targetTable) throw new NotFoundException('Mesa de destino não encontrada ou inativa');
+
+      const activeOrderOnTarget = await tx.order.findFirst({
+        where: {
+          tenantId: req.tenantId,
+          tableId: targetTableId,
+          status: { notIn: ['closed', 'canceled'] },
+          id: { not: id },
+        },
+      });
+      if (activeOrderOnTarget) {
+        throw new ConflictException(`Mesa "${targetTable.label}" já está ocupada por outra comanda ativa`);
+      }
+
+      try {
+        await tx.order.update({
+          where: { id },
+          data: {
+            tableId: targetTable.id,
+            table_label: targetTable.label,
+            version: { increment: 1 },
+          },
+        });
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          throw new ConflictException(`Conflito ao transferir: mesa "${targetTable.label}" já está ocupada`);
+        }
+        throw error;
+      }
+
+      return tx.order.findUniqueOrThrow({
+        where: { id },
+        include: { items: true, payments: true, history: { orderBy: { changed_at: 'asc' } } },
+      });
+    });
+
+    this.ordersGateway.emitToTenant(req.tenantId, 'order:updated', updated);
+    return updated;
+  }
+
   @Roles('cashier', 'manager')
   @Post(':id/close')
   async closeOrder(@Request() req: RequestContext, @Param('id') id: string, @Body() body: CloseOrderDto) {
+    if (body.payments && body.payments.length > 0) {
+      return this.settleOrder(req, id, body as SettleOrderDto);
+    }
     const rawKey = req.headers['x-idempotency-key'];
     const key = Array.isArray(rawKey) ? rawKey[0] : rawKey;
-
     const cached = await this.checkIdempotency(req.tenantId, key, body);
     if (cached) return cached;
 
     const userId = req.user?.sub;
-
     const updated = await this.prisma.$transaction(async (tx) => {
       const whereClause: any = {
         id,
         tenantId: req.tenantId,
         status: { in: ['open', 'sentToKitchen', 'delivered'] },
       };
-
-      if (body?.expected_version !== undefined) {
-        whereClause.version = body.expected_version;
-      }
+      if (body?.expected_version !== undefined) whereClause.version = body.expected_version;
 
       const closeResult = await tx.order.updateMany({
         where: whereClause,
-        data: {
-          status: 'closed',
-          version: { increment: 1 },
-        },
+        data: { status: 'closed', version: { increment: 1 }, tableId: null },
       });
-
       if (closeResult.count === 0) {
         const existing = await tx.order.findFirst({
           where: { id, tenantId: req.tenantId },
-          include: { items: true, history: { orderBy: { changed_at: 'asc' } } },
+          include: { items: true, payments: true, history: { orderBy: { changed_at: 'asc' } } },
         });
         if (!existing) throw new NotFoundException('Comanda não encontrada');
-        if (existing.status === 'closed') {
-          return existing;
-        }
-        if (existing.status === 'canceled') {
-          throw new BadRequestException('Comanda cancelada não pode ser fechada');
-        }
+        if (existing.status === 'closed') return existing;
+        if (existing.status === 'canceled') throw new BadRequestException('Comanda cancelada não pode ser fechada');
         if (body?.expected_version !== undefined && existing.version !== body.expected_version) {
           throw new ConflictException(`Conflito de concorrência: versão esperada ${body.expected_version}, atual ${existing.version}`);
         }
@@ -431,23 +598,15 @@ export class OrdersController {
       }
 
       await tx.orderStatusHistory.create({
-        data: {
-          orderId: id,
-          from_status: null,
-          to_status: 'closed',
-          changed_by: userId,
-        },
+        data: { orderId: id, from_status: null, to_status: 'closed', changed_by: userId },
       });
-
       const closed = await tx.order.findUniqueOrThrow({
         where: { id },
-        include: { items: true, history: { orderBy: { changed_at: 'asc' } } },
+        include: { items: true, payments: true, history: { orderBy: { changed_at: 'asc' } } },
       });
-
       await this.saveIdempotency(tx, req.tenantId, key, body, closed);
       return closed;
     });
-
     this.ordersGateway.emitToTenant(req.tenantId, 'order:updated', updated);
     return updated;
   }

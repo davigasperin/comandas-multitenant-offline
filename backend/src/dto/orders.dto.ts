@@ -1,9 +1,14 @@
-import { IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateOrderDto {
   @IsString()
   @IsNotEmpty({ message: 'table_label é obrigatório' })
   table_label!: string;
+
+  @IsOptional()
+  @IsString()
+  table_id?: string;
 }
 
 export class AddItemDto {
@@ -29,6 +34,10 @@ export class AddItemDto {
   notes?: string;
 
   @IsOptional()
+  @IsString()
+  selected_options?: string;
+
+  @IsOptional()
   @IsInt({ message: 'expected_version deve ser um número inteiro' })
   @Min(1)
   expected_version?: number;
@@ -45,11 +54,64 @@ export class UpdateOrderStatusDto {
   expected_version?: number;
 }
 
-export class CloseOrderDto {
+export class OrderPaymentDto {
+  @IsString()
+  @IsNotEmpty()
+  method!: string; // cash, pix, credit, debit, voucher
+
+  @IsInt()
+  @Min(1)
+  amount_cents!: number;
+
   @IsOptional()
-  @IsInt({ message: 'expected_version deve ser um número inteiro' })
+  @IsInt()
+  @Min(0)
+  tendered_cents?: number;
+}
+
+export class SettleOrderDto {
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  discount_cents?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  service_fee_bps?: number;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => OrderPaymentDto)
+  payments!: OrderPaymentDto[];
+
+  @IsOptional()
+  @IsInt()
   @Min(1)
   expected_version?: number;
+}
+
+export class CloseOrderDto {
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  expected_version?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  discount_cents?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  service_fee_bps?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => OrderPaymentDto)
+  payments?: OrderPaymentDto[];
 }
 
 export class QueryOrdersDto {
@@ -65,4 +127,212 @@ export class QueryOrdersDto {
   @IsOptional()
   @IsString()
   cursor?: string;
+}
+
+export class CreateCategoryDto {
+  @IsString()
+  @IsNotEmpty()
+  name!: string;
+
+  @IsOptional()
+  @IsInt()
+  sort_order?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
+
+  @IsOptional()
+  @IsIn(['kitchen', 'bar', 'dessert', 'none'])
+  production_area?: string;
+
+}
+
+export class UpdateCategoryDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsInt()
+  sort_order?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
+
+  @IsOptional()
+  @IsIn(['kitchen', 'bar', 'dessert', 'none'])
+  production_area?: string;
+}
+
+export class CreateProductDto {
+  @IsString()
+  @IsNotEmpty()
+  name!: string;
+
+  @IsInt()
+  @Min(0)
+  price_cents!: number;
+
+  @IsOptional()
+  @IsString()
+  category_id?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  available?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  sort_order?: number;
+}
+
+export class UpdateProductDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  price_cents?: number;
+
+  @IsOptional()
+  @IsString()
+  category_id?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  available?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  sort_order?: number;
+}
+
+export class CreateTableDto {
+  @IsString()
+  @IsNotEmpty()
+  label!: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  capacity?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(5000)
+  pos_x?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(5000)
+  pos_y?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(40)
+  @Max(800)
+  width?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(40)
+  @Max(800)
+  height?: number;
+
+  @IsOptional()
+  @IsIn(['square', 'rectangle', 'circle'])
+  shape?: string;
+}
+
+export class UpdateTableDto {
+  @IsOptional()
+  @IsString()
+  label?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  capacity?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(5000)
+  pos_x?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(5000)
+  pos_y?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(40)
+  @Max(800)
+  width?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(40)
+  @Max(800)
+  height?: number;
+
+  @IsOptional()
+  @IsIn(['square', 'rectangle', 'circle'])
+  shape?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
+}
+
+export class UpdateTableLayoutDto {
+  @IsInt()
+  @Min(0)
+  @Max(5000)
+  pos_x!: number;
+
+  @IsInt()
+  @Min(0)
+  @Max(5000)
+  pos_y!: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(40)
+  @Max(800)
+  width?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(40)
+  @Max(800)
+  height?: number;
+
+  @IsOptional()
+  @IsIn(['square', 'rectangle', 'circle'])
+  shape?: string;
+}
+
+export class TransferTableDto {
+  @IsString()
+  @IsNotEmpty()
+  target_table_id!: string;
 }

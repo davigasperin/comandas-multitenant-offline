@@ -190,7 +190,15 @@ A documentação inclui autenticação Bearer JWT, cabeçalhos `X-Tenant-Id` e `
 | `GET` | `/orders/:id` | `Authorization`, `X-Tenant-Id` | Obtém detalhe completo e itens de uma comanda |
 | `POST` | `/orders/:id/items` | `Authorization`, `X-Tenant-Id`, `X-Idempotency-Key` | Lança item em comanda aberta, validando produto e preço do tenant |
 | `PATCH` | `/orders/:id/status` | `Authorization`, `X-Tenant-Id`, `X-Idempotency-Key` | Avança status do pedido (`open` $\rightarrow$ `sentToKitchen` $\rightarrow$ `delivered`) |
-| `POST` | `/orders/:id/close` | `Authorization`, `X-Tenant-Id`, `X-Idempotency-Key` | Fecha comanda bloqueando qualquer inclusão posterior |
+| `POST` | `/orders/:id/settlement-preview` | `Authorization`, `X-Tenant-Id` | Pré-visualização do cálculo com desconto e taxa de serviço |
+| `POST` | `/orders/:id/settle` | `Authorization`, `X-Tenant-Id`, `X-Idempotency-Key` | Liquidação financeira com divisão de métodos de pagamento e troco |
+| `POST` | `/orders/:id/transfer` | `Authorization`, `X-Tenant-Id` | Transferência atômica da comanda para outra mesa disponível |
+| `GET` | `/categories` | `Authorization`, `X-Tenant-Id` | Lista categorias de produtos do estabelecimento |
+| `POST` | `/categories` | `Authorization`, `X-Tenant-Id` | Criação de categoria (exclusivo para Gerente) |
+| `GET` | `/products` | `Authorization`, `X-Tenant-Id` | Listagem de produtos ativos com categoria associada |
+| `POST` | `/products` | `Authorization`, `X-Tenant-Id` | Cadastro de produto com preço em centavos (Gerente) |
+| `GET` | `/tables` | `Authorization`, `X-Tenant-Id` | Listagem de mesas, coordenadas e status de ocupação |
+| `POST` | `/tables` | `Authorization`, `X-Tenant-Id` | Cadastro de nova mesa no salão (Gerente) |
 
 ### Eventos WebSocket (`Namespace: /orders`)
 

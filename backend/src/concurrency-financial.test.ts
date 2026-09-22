@@ -80,11 +80,18 @@ async function runConcurrencyAndFinancialTests() {
   assert.strictEqual(updatedA.status, 'sentToKitchen');
   assert.strictEqual(updatedA.version, 3);
 
-  // 5. Fechamento da comanda com versionamento
-  const closed = await controller.closeOrder(
+  // 5. Fechamento da comanda com versionamento e liquidação financeira
+  const closed = await controller.settleOrder(
     { tenantId, user: { sub: 'usr_caixa_3' }, headers: { 'x-idempotency-key': `k_close_${runId}` } } as any,
     order.id,
-    { expected_version: 3 },
+    {
+      expected_version: 3,
+      discount_cents: 0,
+      service_fee_bps: 1000,
+      payments: [
+        { method: 'pix', amount_cents: Math.round(5997 + (5997 * 1000) / 10000) },
+      ],
+    },
   );
   assert.strictEqual(closed.status, 'closed');
   assert.strictEqual(closed.version, 4);

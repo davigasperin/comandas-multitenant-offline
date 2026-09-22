@@ -64,4 +64,27 @@ void main() {
     expect(pending.first.path, '/orders');
     expect(pending.first.body?['table_label'], 'Mesa 42');
   });
+
+  test('OfflineInterceptor nunca enfileira liquidação financeira', () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final queue = MutationQueueStorage(prefs);
+    final interceptor = OfflineInterceptor(prefs, queue);
+    final handler = _FakeErrorHandler();
+    final request = RequestOptions(
+      path: '/orders/order_1/settle',
+      method: 'POST',
+      data: {'payments': <dynamic>[]},
+      headers: {'X-Tenant-Id': 'tenant_test'},
+      extra: {'owner': 'user_owner_1'},
+    );
+
+    interceptor.onError(
+      DioException(requestOptions: request, type: DioExceptionType.connectionError),
+      handler,
+    );
+
+    await expectLater(handler.completer.future, throwsA(isA<DioException>()));
+    expect(queue.getAll(), isEmpty);
+  });
 }

@@ -29,8 +29,8 @@ class OrdersRepository {
         });
         final payload = response.data as Map<String, dynamic>;
         final data = payload['data'] as List<dynamic>;
-        orders.addAll(data
-            .map((j) => Order.fromJson(j as Map<String, dynamic>)));
+        orders
+            .addAll(data.map((j) => Order.fromJson(j as Map<String, dynamic>)));
         final pagination = payload['pagination'] as Map<String, dynamic>?;
         cursor = pagination?['next_cursor'] as String?;
       } while (cursor != null);
@@ -142,6 +142,60 @@ class OrdersRepository {
           items: const [],
           openedAt: DateTime.now(),
         );
+      }
+      _rethrowAsApiException(e);
+    }
+  }
+
+  Future<SettlementPreview> previewSettlement({
+    required String orderId,
+    int discountCents = 0,
+    int serviceFeeBps = 1000,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/orders/$orderId/settlement-preview',
+        data: {
+          'discount_cents': discountCents,
+          'service_fee_bps': serviceFeeBps,
+        },
+      );
+      return SettlementPreview.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      _rethrowAsApiException(e);
+    }
+  }
+
+  Future<bool> settleOrder({
+    required String orderId,
+    required List<Map<String, dynamic>> payments,
+    int discountCents = 0,
+    int serviceFeeBps = 1000,
+    int? expectedVersion,
+    String? idempotencyKey,
+  }) async {
+    try {
+      final key = idempotencyKey ??
+          'idemp_settle_${DateTime.now().microsecondsSinceEpoch}';
+      final response = await _dio.post(
+        '/orders/$orderId/settle',
+        data: {
+          'payments': payments,
+          'discount_cents': discountCents,
+          'service_fee_bps': serviceFeeBps,
+          if (expectedVersion != null) 'expected_version': expectedVersion,
+        },
+        options: Options(
+          headers: {'X-Idempotency-Key': key},
+          extra: {'skipOfflineQueue': true},
+        ),
+      );
+      return response.statusCode != 202 && response.extra['queued'] != true;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 202 ||
+          e.response?.extra['queued'] == true) {
+        throw ApiException.unknown(
+            'Liquidação financeira não pode ser enfileirada offline.');
       }
       _rethrowAsApiException(e);
     }
