@@ -9,6 +9,12 @@ import { AuthService } from './auth.service';
 import { validateJwtSecret } from './config.utils';
 
 import { CatalogController } from './catalog.controller';
+import { EmployeesController, SettingsController } from './admin.controller';
+import { FinanceController, InventoryController, PurchasesController, SuppliersController } from './management.controller';
+import { ReportsController } from './reports.controller';
+import { FeatureGuard } from './feature.guard';
+import { PixController, PixWebhookController } from './pix.controller';
+import { PixService } from './pix.service';
 
 @Module({
   imports: [
@@ -20,7 +26,20 @@ import { CatalogController } from './catalog.controller';
       signOptions: { expiresIn: '15m' },
     }),
   ],
-  controllers: [AppController, OrdersController, CatalogController],
-  providers: [AuthService, OrdersGateway],
+  controllers: [
+    AppController,
+    OrdersController,
+    CatalogController,
+    SuppliersController,
+    FinanceController,
+    InventoryController,
+    PurchasesController,
+    EmployeesController,
+    SettingsController,
+    ReportsController,
+    PixController,
+    PixWebhookController,
+  ],
+  providers: [AuthService, OrdersGateway, FeatureGuard, PixService],
 })
 export class AppModule {}

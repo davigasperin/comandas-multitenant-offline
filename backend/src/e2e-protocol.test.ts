@@ -23,6 +23,11 @@ async function runE2eSuite() {
   process.env.CORS_ORIGINS = 'http://localhost:3000,http://app.comandas.local';
   process.env.PORT = '0';
 
+  // Prisma 5 running on newer Node versions may not create the SQLite file
+  // before invoking the schema engine. Pre-creating an empty test database
+  // keeps the E2E suite portable without affecting production migrations.
+  fs.closeSync(fs.openSync(tempDbPath, 'w'));
+
   execSync('npx prisma migrate deploy', {
     cwd: path.resolve(__dirname, '..'),
     env: { ...process.env, DATABASE_URL: tempDbUrl },

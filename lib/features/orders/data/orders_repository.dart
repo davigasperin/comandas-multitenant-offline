@@ -40,13 +40,13 @@ class OrdersRepository {
     }
   }
 
-  Future<Order> createOrder({required String tableLabel}) async {
+  Future<Order> createOrder({required String tableLabel, String orderType = 'table'}) async {
     try {
       final idempKey = 'idemp_create_${DateTime.now().microsecondsSinceEpoch}';
       final tempId = 'temp_${DateTime.now().microsecondsSinceEpoch}';
       final response = await _dio.post(
         '/orders',
-        data: {'table_label': tableLabel},
+        data: {'table_label': tableLabel, 'order_type': orderType},
         options: Options(
           headers: {'X-Idempotency-Key': idempKey},
           extra: {'tempOrderId': tempId},
@@ -150,13 +150,19 @@ class OrdersRepository {
   Future<SettlementPreview> previewSettlement({
     required String orderId,
     int discountCents = 0,
+    String discountType = 'fixed',
+    int? discountValue,
     int serviceFeeBps = 1000,
   }) async {
     try {
       final response = await _dio.post(
         '/orders/$orderId/settlement-preview',
         data: {
-          'discount_cents': discountCents,
+          if (discountType == 'fixed') 'discount_cents': discountCents,
+          if (discountType == 'percent' || discountValue != null)
+            'discount_type': discountType,
+          if (discountType == 'percent' || discountValue != null)
+            'discount_value': discountValue ?? discountCents,
           'service_fee_bps': serviceFeeBps,
         },
       );
@@ -170,6 +176,8 @@ class OrdersRepository {
     required String orderId,
     required List<Map<String, dynamic>> payments,
     int discountCents = 0,
+    String discountType = 'fixed',
+    int? discountValue,
     int serviceFeeBps = 1000,
     int? expectedVersion,
     String? idempotencyKey,
@@ -181,7 +189,11 @@ class OrdersRepository {
         '/orders/$orderId/settle',
         data: {
           'payments': payments,
-          'discount_cents': discountCents,
+          if (discountType == 'fixed') 'discount_cents': discountCents,
+          if (discountType == 'percent' || discountValue != null)
+            'discount_type': discountType,
+          if (discountType == 'percent' || discountValue != null)
+            'discount_value': discountValue ?? discountCents,
           'service_fee_bps': serviceFeeBps,
           if (expectedVersion != null) 'expected_version': expectedVersion,
         },
@@ -197,6 +209,33 @@ class OrdersRepository {
         throw ApiException.unknown(
             'Liquidação financeira não pode ser enfileirada offline.');
       }
+      _rethrowAsApiException(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> createPixCharge({
+    required String orderId,
+    required int expectedVersion,
+    int discountCents = 0,
+    String discountType = 'fixed',
+    int? discountValue,
+    int serviceFeeBps = 0,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/pix/charges',
+        data: {
+          'order_id': orderId,
+          'expected_version': expectedVersion,
+          if (discountType == 'fixed') 'discount_cents': discountCents,
+          'discount_type': discountType,
+          'discount_value': discountValue ?? discountCents,
+          'service_fee_bps': serviceFeeBps,
+        },
+        options: Options(extra: {'skipOfflineQueue': true}),
+      );
+      return Map<String, dynamic>.from(response.data as Map);
+    } on DioException catch (e) {
       _rethrowAsApiException(e);
     }
   }

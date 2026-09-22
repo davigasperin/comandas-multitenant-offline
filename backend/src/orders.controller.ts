@@ -26,6 +26,7 @@ import { RolesGuard } from './roles.guard';
 interface RequestContext {
   tenantId: string;
   user?: { sub: string };
+  role?: string;
   headers: Record<string, string | string[] | undefined>;
 }
 
@@ -184,11 +185,20 @@ export class OrdersController {
   @Roles('waiter', 'cashier', 'manager')
   @Post()
   async createOrder(@Request() req: RequestContext, @Body() body: CreateOrderDto) {
-    let tableLabel = body.table_label.trim();
+    const orderType = body.order_type ?? 'table';
+    let tableLabel = body.table_label?.trim() ?? '';
     const userId = req.user?.sub;
     let diningTableId: string | null = null;
 
-    if (body.table_id) {
+    if (orderType === 'table' && !tableLabel && !body.table_id) {
+      throw new BadRequestException('table_label ou table_id é obrigatório para comanda de mesa');
+    }
+    if (orderType !== 'table') {
+      diningTableId = null;
+      tableLabel = tableLabel || (orderType === 'quick_sale' ? 'Venda rápida' : orderType === 'takeaway' ? 'Retirada' : 'Delivery');
+    }
+
+    if (orderType === 'table' && body.table_id) {
       const table = await this.prisma.diningTable.findFirst({
         where: { id: body.table_id, tenantId: req.tenantId, active: true },
       });
@@ -217,6 +227,7 @@ export class OrdersController {
             tenantId: req.tenantId,
             tableId: diningTableId,
             table_label: tableLabel,
+            order_type: orderType,
             status: 'open',
             version: 1,
             history: {
@@ -273,6 +284,8 @@ export class OrdersController {
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      const pendingPix = await tx.pixCharge.findFirst({ where: { orderId: id, status: 'pending' } });
+      if (pendingPix) throw new ConflictException('Existe uma cobrança Pix pendente para esta comanda');
       const whereClause: any = {
         id,
         tenantId: req.tenantId,
@@ -342,6 +355,8 @@ export class OrdersController {
     const rawQuantity = body.quantity;
     let productName = typeof body.product_name === 'string' ? body.product_name.trim() : '';
     let unitPriceCents = body.unit_price_cents;
+    let productId: string | undefined;
+    let unitCostCents = 0;
 
     if (typeof body.product_id === 'string' && body.product_id.trim()) {
       const product = await this.prisma.product.findFirst({
@@ -353,6 +368,8 @@ export class OrdersController {
       }
       productName = product.name;
       unitPriceCents = product.price_cents; // Preço canônico do servidor
+      unitCostCents = product.cost_cents;
+      productId = product.id;
     }
 
     if (!productName) {
@@ -364,8 +381,13 @@ export class OrdersController {
     }
 
     const notes = typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim() : undefined;
+    const selectedOptions = typeof body.selected_options === 'string' && body.selected_options.trim()
+      ? body.selected_options.trim()
+      : undefined;
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      const pendingPix = await tx.pixCharge.findFirst({ where: { orderId: id, status: 'pending' } });
+      if (pendingPix) throw new ConflictException('Existe uma cobrança Pix pendente para esta comanda');
       const whereClause: any = {
         id,
         tenantId: req.tenantId,
@@ -396,9 +418,12 @@ export class OrdersController {
       await tx.orderItem.create({
         data: {
           orderId: id,
+          productId,
           product_name: productName,
           quantity: rawQuantity,
           unit_price_cents: unitPriceCents,
+          unit_cost_cents: unitCostCents,
+          selected_options: selectedOptions,
           notes,
         },
       });
@@ -416,20 +441,69 @@ export class OrdersController {
     return updated;
   }
 
-  private async settlementPreview(tenantId: string, id: string, discountCents = 0, serviceFeeBps = 1000) {
+  private resolveDiscount(
+    subtotalCents: number,
+    body: Pick<SettleOrderDto, 'discount_cents' | 'discount_type' | 'discount_value'>,
+  ) {
+    const type = body.discount_type ?? (body.discount_cents !== undefined ? 'fixed' : undefined);
+    let discountCents = body.discount_cents ?? 0;
+    let discountValue = body.discount_value;
+    if (type === 'percent') {
+      if (discountValue === undefined || discountValue < 0 || discountValue > 10000) {
+        throw new BadRequestException('Desconto percentual deve estar entre 0 e 100%');
+      }
+      const calculated = Math.round((subtotalCents * discountValue) / 10000);
+      if (body.discount_cents !== undefined && body.discount_cents !== calculated) {
+        throw new BadRequestException('discount_cents não corresponde ao percentual informado');
+      }
+      discountCents = calculated;
+    } else if (type === 'fixed') {
+      if (discountValue !== undefined && body.discount_cents !== undefined && discountValue !== body.discount_cents) {
+        throw new BadRequestException('Valores de desconto fixo divergentes');
+      }
+      discountCents = discountValue ?? discountCents;
+      discountValue = discountCents;
+    }
+    return { discountType: type, discountValue, discountCents };
+  }
+
+  private async assertDiscountPermission(req: RequestContext, subtotalCents: number, discountCents: number) {
+    const role = req.role === 'owner' || req.role === 'admin' ? 'manager' : req.role;
+    if (role === 'cashier' && subtotalCents > 0) {
+      const tenant = await this.prisma.tenant.findUnique({
+        where: { id: req.tenantId },
+        select: { cashier_discount_limit_bps: true },
+      });
+      const limit = tenant?.cashier_discount_limit_bps ?? 10000;
+      if (discountCents * 10000 > subtotalCents * limit) {
+        throw new BadRequestException(`Desconto excede o limite de ${(limit / 100).toFixed(2)}% configurado para o caixa`);
+      }
+    }
+  }
+
+  private async settlementPreview(tenantId: string, id: string, body: Partial<SettleOrderDto>) {
     const order = await this.prisma.order.findFirst({
       where: { id, tenantId },
       include: { items: true },
     });
     if (!order) throw new NotFoundException('Comanda não encontrada');
     const subtotalCents = order.items.reduce((total, item) => total + item.quantity * item.unit_price_cents, 0);
-    return calculateBillTotals({ subtotalCents, discountCents, serviceFeeBps });
+    const discount = this.resolveDiscount(subtotalCents, body);
+    return {
+      ...calculateBillTotals({
+        subtotalCents,
+        discountCents: discount.discountCents,
+        serviceFeeBps: body.service_fee_bps ?? 1000,
+      }),
+      ...discount,
+    };
   }
 
   @Roles('cashier', 'manager')
   @Post(':id/settlement-preview')
   async previewSettlement(@Request() req: RequestContext, @Param('id') id: string, @Body() body: Partial<SettleOrderDto>) {
-    const totals = await this.settlementPreview(req.tenantId, id, body.discount_cents ?? 0, body.service_fee_bps ?? 1000);
+    const totals = await this.settlementPreview(req.tenantId, id, body);
+    await this.assertDiscountPermission(req, totals.subtotalCents, totals.discountCents);
     return {
       subtotal_cents: totals.subtotalCents,
       discount_cents: totals.discountCents,
@@ -437,6 +511,8 @@ export class OrdersController {
       service_fee_bps: totals.serviceFeeBps,
       service_fee_cents: totals.serviceFeeCents,
       total_cents: totals.totalCents,
+      discount_type: totals.discountType,
+      discount_value: totals.discountValue,
     };
   }
 
@@ -457,11 +533,15 @@ export class OrdersController {
       if (body.expected_version !== undefined && order.version !== body.expected_version) {
         throw new ConflictException(`Conflito de concorrência: versão esperada ${body.expected_version}, atual ${order.version}`);
       }
+      const pendingPix = await tx.pixCharge.findFirst({ where: { orderId: id, status: 'pending' } });
+      if (pendingPix) throw new ConflictException('Aguarde ou cancele a cobrança Pix pendente antes de liquidar manualmente');
 
       const subtotalCents = order.items.reduce((total, item) => total + item.quantity * item.unit_price_cents, 0);
+      const discount = this.resolveDiscount(subtotalCents, body);
+      await this.assertDiscountPermission(req, subtotalCents, discount.discountCents);
       const totals = calculateBillTotals({
         subtotalCents,
-        discountCents: body.discount_cents ?? 0,
+        discountCents: discount.discountCents,
         serviceFeeBps: body.service_fee_bps ?? 1000,
       });
       const paymentCheck = validatePaymentsTotal(totals.totalCents, body.payments.map((payment) => ({
@@ -475,6 +555,9 @@ export class OrdersController {
         data: {
           status: 'closed', version: { increment: 1 }, subtotal_cents: totals.subtotalCents,
           discount_cents: totals.discountCents, service_fee_bps: totals.serviceFeeBps,
+          discount_type: discount.discountType,
+          discount_value: discount.discountValue,
+          discount_authorized_by: totals.discountCents > 0 ? req.user?.sub : null,
           service_fee_cents: totals.serviceFeeCents, total_cents: totals.totalCents,
           settled_at: new Date(), settled_by: req.user?.sub,
           tableId: null, // Libera a ocupação da mesa atomicamente
@@ -489,6 +572,45 @@ export class OrdersController {
         })),
       });
       await tx.orderStatusHistory.create({ data: { orderId: id, from_status: order.status, to_status: 'closed', changed_by: req.user?.sub } });
+      const saleByProduct = new Map<string, { quantity: number; unitCostCents: number }>();
+      for (const item of order.items) {
+        if (!item.productId) continue;
+        const current = saleByProduct.get(item.productId) ?? { quantity: 0, unitCostCents: item.unit_cost_cents };
+        current.quantity += item.quantity;
+        saleByProduct.set(item.productId, current);
+      }
+      for (const [productId, sale] of saleByProduct) {
+        const product = await tx.product.findFirst({ where: { id: productId, tenantId: req.tenantId } });
+        if (!product?.stock_controlled) continue;
+        await tx.product.update({ where: { id: productId }, data: { stock_quantity: { decrement: sale.quantity } } });
+        await tx.stockMovement.create({
+          data: {
+            tenantId: req.tenantId,
+            productId,
+            type: 'sale',
+            quantity: new Prisma.Decimal(-sale.quantity),
+            unit_cost_cents: sale.unitCostCents,
+            reference_type: 'order',
+            reference_id: id,
+            created_by: req.user?.sub,
+          },
+        });
+      }
+      if (totals.discountCents > 0) {
+        const auditUser = req.user?.sub
+          ? await tx.user.findUnique({ where: { id: req.user.sub }, select: { id: true } })
+          : null;
+        await tx.auditLog.create({
+          data: {
+            tenantId: req.tenantId,
+            userId: auditUser?.id,
+            action: 'order.discount_applied',
+            entity_type: 'order',
+            entity_id: id,
+            metadata: JSON.stringify({ type: discount.discountType, value: discount.discountValue, amount_cents: totals.discountCents }),
+          },
+        });
+      }
       return tx.order.findUniqueOrThrow({ where: { id }, include: { items: true, payments: true, history: { orderBy: { changed_at: 'asc' } } } });
     });
     if (!result.replayed) this.ordersGateway.emitToTenant(req.tenantId, 'order:updated', result.value);

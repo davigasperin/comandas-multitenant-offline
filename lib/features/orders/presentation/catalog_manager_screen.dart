@@ -22,9 +22,18 @@ class CatalogManagerScreen extends ConsumerStatefulWidget {
 }
 
 class _CatalogManagerScreenState extends ConsumerState<CatalogManagerScreen> {
+  int _parseOptionalCents(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty || normalized == '0' || normalized == '0,00') return 0;
+    return BrlCurrency.parseToCents(normalized);
+  }
+
   Future<void> _editProduct(CatalogProduct product, List<CatalogCategory> categories) async {
     final name = TextEditingController(text: product.name);
     final price = TextEditingController(text: (product.priceCents / 100).toStringAsFixed(2).replaceAll('.', ','));
+    final cost = TextEditingController(text: (product.costCents / 100).toStringAsFixed(2).replaceAll('.', ','));
+    final minimumStock = TextEditingController(text: product.minimumStock.toString());
+    final stockControlled = ValueNotifier<bool>(product.stockControlled);
     final formKey = GlobalKey<FormState>();
     final result = await showDialog<bool>(
       context: context,
@@ -40,6 +49,26 @@ class _CatalogManagerScreenState extends ConsumerState<CatalogManagerScreen> {
               decoration: const InputDecoration(labelText: 'Preço (R\$)', hintText: 'Ex.: 10,86'),
               validator: (v) { try { BrlCurrency.parseToCents(v ?? ''); return null; } on FormatException catch (e) { return e.message; } },
             ),
+            TextFormField(
+              controller: cost,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'Custo unitário (R\$)', hintText: '0,00'),
+              validator: (v) { try { _parseOptionalCents(v ?? ''); return null; } on FormatException catch (e) { return e.message; } },
+            ),
+            ValueListenableBuilder<bool>(
+              valueListenable: stockControlled,
+              builder: (_, value, __) => CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: value,
+                title: const Text('Controlar estoque'),
+                onChanged: (next) => stockControlled.value = next ?? false,
+              ),
+            ),
+            TextFormField(
+              controller: minimumStock,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'Estoque mínimo'),
+            ),
           ]),
         ),
         actions: [
@@ -50,6 +79,9 @@ class _CatalogManagerScreenState extends ConsumerState<CatalogManagerScreen> {
               id: product.id,
               name: name.text.trim(),
               priceCents: BrlCurrency.parseToCents(price.text),
+              costCents: _parseOptionalCents(cost.text),
+              stockControlled: stockControlled.value,
+              minimumStock: num.tryParse(minimumStock.text.replaceAll(',', '.')) ?? 0,
               categoryId: product.categoryId,
               available: product.available,
               sortOrder: product.sortOrder,
@@ -106,6 +138,9 @@ class _CatalogManagerScreenState extends ConsumerState<CatalogManagerScreen> {
   Future<void> _newProduct(List<CatalogCategory> categories) async {
     final name = TextEditingController();
     final price = TextEditingController();
+    final cost = TextEditingController(text: '0,00');
+    final minimumStock = TextEditingController(text: '0');
+    final stockControlled = ValueNotifier<bool>(false);
     final formKey = GlobalKey<FormState>();
     final result = await showDialog<bool>(
       context: context,
@@ -121,6 +156,36 @@ class _CatalogManagerScreenState extends ConsumerState<CatalogManagerScreen> {
                 decoration: const InputDecoration(labelText: 'Nome'),
                 validator: (v) =>
                     v == null || v.trim().isEmpty ? 'Informe o nome' : null,
+              ),
+              TextFormField(
+                controller: cost,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Custo unitário (R\$)',
+                  hintText: '0,00',
+                ),
+                validator: (v) {
+                  try {
+                    _parseOptionalCents(v ?? '');
+                    return null;
+                  } on FormatException catch (e) {
+                    return e.message;
+                  }
+                },
+              ),
+              ValueListenableBuilder<bool>(
+                valueListenable: stockControlled,
+                builder: (_, value, __) => CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: value,
+                  title: const Text('Controlar estoque'),
+                  onChanged: (next) => stockControlled.value = next ?? false,
+                ),
+              ),
+              TextFormField(
+                controller: minimumStock,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'Estoque mínimo'),
               ),
               TextFormField(
                 controller: price,
@@ -154,6 +219,9 @@ class _CatalogManagerScreenState extends ConsumerState<CatalogManagerScreen> {
               await ref.read(catalogRepositoryProvider).createProduct(
                 name: name.text.trim(),
                 priceCents: cents,
+                costCents: _parseOptionalCents(cost.text),
+                stockControlled: stockControlled.value,
+                minimumStock: num.tryParse(minimumStock.text.replaceAll(',', '.')) ?? 0,
               );
               if (dialogContext.mounted) Navigator.pop(dialogContext, true);
             },
@@ -182,7 +250,10 @@ class _CatalogManagerScreenState extends ConsumerState<CatalogManagerScreen> {
                 color: product.active ? null : Colors.grey,
               ),
             ),
-            subtitle: Text(BrlCurrency.formatCents(product.priceCents)),
+            subtitle: Text(
+              '${BrlCurrency.formatCents(product.priceCents)} · custo ${BrlCurrency.formatCents(product.costCents)}'
+              '${product.stockControlled ? ' · estoque ${product.stockQuantity} ${product.unit}' : ''}',
+            ),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [

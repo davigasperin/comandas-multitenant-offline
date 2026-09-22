@@ -211,23 +211,48 @@ class CreateOrderFab extends ConsumerStatefulWidget {
 class _CreateOrderFabState extends ConsumerState<CreateOrderFab> {
   final _formKey = GlobalKey<FormState>();
   String _tableLabel = '';
+  String _orderType = 'table';
   bool _isLoading = false;
 
   void _showDialog() {
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
+        return StatefulBuilder(builder: (context, setDialogState) => AlertDialog(
           title: const Text('Nova Comanda'),
           content: Form(
             key: _formKey,
-            child: TextFormField(
-              autofocus: true,
-              decoration: const InputDecoration(labelText: 'Mesa ou Cliente'),
-              validator: (val) => val == null || val.trim().isEmpty
-                  ? 'Informe a mesa/comanda'
-                  : null,
-              onSaved: (val) => _tableLabel = val!.trim(),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: _orderType,
+                  decoration: const InputDecoration(labelText: 'Tipo de venda'),
+                  items: const [
+                    DropdownMenuItem(value: 'table', child: Text('Mesa / comanda')),
+                    DropdownMenuItem(value: 'quick_sale', child: Text('Venda rápida')),
+                    DropdownMenuItem(value: 'takeaway', child: Text('Retirada')),
+                    DropdownMenuItem(value: 'delivery', child: Text('Delivery')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setDialogState(() => _orderType = value);
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    labelText: _orderType == 'table'
+                        ? 'Mesa ou comanda'
+                        : 'Identificação (opcional)',
+                  ),
+                  validator: (val) => _orderType == 'table' &&
+                          (val == null || val.trim().isEmpty)
+                      ? 'Informe a mesa/comanda'
+                      : null,
+                  onSaved: (val) => _tableLabel = val?.trim() ?? '',
+                ),
+              ],
             ),
           ),
           actions: [
@@ -245,7 +270,7 @@ class _CreateOrderFabState extends ConsumerState<CreateOrderFab> {
                   : const Text('Criar'),
             ),
           ],
-        );
+        ));
       },
     );
   }
@@ -259,7 +284,10 @@ class _CreateOrderFabState extends ConsumerState<CreateOrderFab> {
     setState(() => _isLoading = true);
     try {
       final repo = ref.read(ordersRepositoryProvider);
-      final newOrder = await repo.createOrder(tableLabel: _tableLabel);
+      final newOrder = await repo.createOrder(
+        tableLabel: _tableLabel,
+        orderType: _orderType,
+      );
 
       ref.invalidate(openOrdersProvider);
 
@@ -285,7 +313,7 @@ class _CreateOrderFabState extends ConsumerState<CreateOrderFab> {
     return FloatingActionButton.extended(
       onPressed: _showDialog,
       icon: const Icon(Icons.add),
-      label: const Text('Nova Comanda'),
+      label: const Text('Nova venda'),
     );
   }
 }

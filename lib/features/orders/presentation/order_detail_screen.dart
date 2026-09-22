@@ -339,7 +339,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                             title:
                                 Text('${item.quantity}x ${item.productName}'),
                             subtitle: Text(
-                              '${currency.format(item.unitPrice)} cada${item.notes != null ? "\n• ${item.notes}" : ""}',
+                              '${currency.format(item.unitPrice)} cada'
+                              '${item.selectedOptions != null ? "\n• ${item.selectedOptions}" : ""}'
+                              '${item.notes != null ? "\n• ${item.notes}" : ""}',
                             ),
                             trailing: Text(
                               currency.format(item.subtotal),

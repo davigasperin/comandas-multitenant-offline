@@ -8,10 +8,12 @@ import 'order_model.dart';
 class ReceiptDocument {
   final Order order;
   final String establishmentName;
+  final int paperWidthMm;
 
   const ReceiptDocument({
     required this.order,
     required this.establishmentName,
+    this.paperWidthMm = 80,
   });
 
   Future<Uint8List> buildPdf() async {
@@ -21,7 +23,9 @@ class ReceiptDocument {
 
     pdf.addPage(
       pw.Page(
-        pageFormat: PdfPageFormat.roll80,
+        pageFormat: paperWidthMm == 58
+            ? PdfPageFormat(58 * PdfPageFormat.mm, double.infinity)
+            : PdfPageFormat.roll80,
         margin: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 12),
         build: (pw.Context context) {
           return pw.Column(
@@ -111,6 +115,12 @@ class ReceiptDocument {
                         if (item.notes != null && item.notes!.isNotEmpty)
                           pw.Text(
                             'Obs: ${item.notes}',
+                            style: const pw.TextStyle(fontSize: 8),
+                          ),
+                        if (item.selectedOptions != null &&
+                            item.selectedOptions!.isNotEmpty)
+                          pw.Text(
+                            'Opções: ${item.selectedOptions}',
                             style: const pw.TextStyle(fontSize: 8),
                           ),
                       ],

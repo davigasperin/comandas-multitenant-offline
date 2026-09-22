@@ -21,7 +21,7 @@ export class TenantGuard implements CanActivate {
     const access = await this.prisma.userTenant.findUnique({
       where: { userId_tenantId: { userId: request.user.sub, tenantId: normalizedTenantId } },
     });
-    if (!access) throw new ForbiddenException('Usuário não pertence a este tenant');
+    if (!access || !access.active) throw new ForbiddenException('Usuário não pertence a este tenant ou está inativo');
     request.tenantId = normalizedTenantId;
     request.role = access.role;
     return true;

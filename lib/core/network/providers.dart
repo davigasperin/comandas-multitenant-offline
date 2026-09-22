@@ -14,6 +14,7 @@ import '../../features/tenant/data/tenant_repository.dart';
 import '../../features/orders/data/orders_repository.dart';
 import '../../features/orders/data/receipt_service.dart';
 import '../../features/orders/data/catalog_repository.dart';
+import '../../features/management/data/management_repository.dart';
 
 final secureStorageProvider = Provider<FlutterSecureStorage>((ref) {
   return const FlutterSecureStorage();
@@ -113,5 +114,12 @@ final catalogRepositoryProvider = Provider<CatalogRepository>((ref) {
 });
 
 final receiptServiceProvider = Provider<ReceiptService>((ref) {
-  return StandardReceiptService(ref.watch(tenantRepositoryProvider));
+  return StandardReceiptService(
+    ref.watch(tenantRepositoryProvider),
+    ref.watch(managementRepositoryProvider),
+  );
+});
+
+final managementRepositoryProvider = Provider<ManagementRepository>((ref) {
+  return ManagementRepository(ref.watch(dioProvider));
 });

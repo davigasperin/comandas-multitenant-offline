@@ -208,6 +208,57 @@ A documentação inclui autenticação Bearer JWT, cabeçalhos `X-Tenant-Id` e `
 
 ---
 
+## Gestão operacional e financeira
+
+O backend também oferece os módulos multi-tenant abaixo, sempre validando o `tenantId` no servidor:
+
+- fornecedores e compras integradas ao custo e às entradas de estoque;
+- estoque por movimentações, ajustes auditáveis e estoque mínimo;
+- contas a pagar, pagamentos parciais, categorias e despesas recorrentes idempotentes;
+- venda rápida (`order_type=quick_sale`) e descontos fixos ou percentuais;
+- custo histórico no item vendido e opções/adicionais persistidos;
+- relatórios de vendas, despesas e margem com CMV por custo vendido ou por compras;
+- funcionários, RBAC, ativação/desativação e trilha de auditoria;
+- entitlements do plano Pro aplicados pelo backend;
+- configuração de impressão em papel de 58 mm ou 80 mm.
+- cobrança Pix dinâmica por adaptador, com confirmação idempotente por webhook e liquidação automática.
+
+Principais rotas:
+
+```text
+/v1/suppliers
+/v1/purchases
+/v1/inventory/stock
+/v1/inventory/movements
+/v1/finance/expenses
+/v1/finance/recurring-expenses
+/v1/reports/sales
+/v1/reports/expenses
+/v1/reports/profit-margin
+/v1/employees
+/v1/settings/entitlements
+/v1/settings/printer
+/v1/settings/discount-policy
+/v1/pix/charges
+/v1/pix/webhooks/:provider
+```
+
+Contas a pagar e margem exigem uma assinatura `pro` ativa. Esconder a opção no Flutter não substitui essa verificação: o `FeatureGuard` também bloqueia chamadas diretas à API.
+
+O Pix usa um contrato de adaptador para não acoplar o domínio a um banco específico. Configure:
+
+```env
+PIX_PROVIDER=nome-do-provedor
+PIX_ADAPTER_URL=https://seu-adaptador.example.com
+PIX_ADAPTER_TOKEN=token-seguro
+PIX_WEBHOOK_URL=https://api.example.com/v1/pix/webhooks/nome-do-provedor
+PIX_WEBHOOK_SECRET=segredo-compartilhado
+```
+
+O adaptador deve aceitar `POST /charges` e devolver `txid`, `copy_paste`, `qr_code` opcional e `expires_at`. O webhook só liquida a venda quando `txid` e valor conferem; notificações repetidas não duplicam pagamentos nem baixa de estoque.
+
+---
+
 ## 🚀 Como Executar Localmente
 
 ### Pré-requisitos
@@ -242,7 +293,7 @@ npm run start:dev
 
 ### 2. Executar Testes do Backend
 ```bash
-npm run test:idempotency
+npm test
 ```
 
 ### 3. Iniciar o Aplicativo Flutter
