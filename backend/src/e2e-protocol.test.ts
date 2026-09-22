@@ -164,7 +164,7 @@ async function runE2eSuite() {
     });
     assert.strictEqual(forbiddenTenantRes.status, 403);
 
-    const allowedTenantRes = await fetch(`${baseUrl}/orders`, {
+    const allowedTenantRes = await fetch(`${baseUrl}/orders?status=open%2CsentToKitchen%2Cdelivered&limit=100`, {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${loginData.access_token}`,
