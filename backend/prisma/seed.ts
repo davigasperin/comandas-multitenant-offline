@@ -48,6 +48,23 @@ async function main() {
     },
   });
 
+  const existingPro = await prisma.tenantSubscription.findFirst({
+    where: { tenantId: tenant2.id, plan: 'pro', status: 'active' },
+  });
+  if (!existingPro) {
+    await prisma.tenantSubscription.create({
+      data: { tenantId: tenant2.id, plan: 'pro', status: 'active' },
+    });
+  }
+
+  for (const name of ['Aluguel', 'Energia', 'Internet', 'Fornecedores', 'Impostos', 'Outros']) {
+    await prisma.expenseCategory.upsert({
+      where: { tenantId_name: { tenantId: tenant2.id, name } },
+      update: { active: true },
+      create: { tenantId: tenant2.id, name },
+    });
+  }
+
   await prisma.userTenant.upsert({
     where: { userId_tenantId: { userId: user.id, tenantId: tenant2.id } },
     update: {},
@@ -59,17 +76,17 @@ async function main() {
   });
 
   const products = [
-    { id: 'prod_1', tenantId: 'ten_1', name: 'Água mineral', price_cents: 500 },
-    { id: 'prod_2', tenantId: 'ten_1', name: 'Refrigerante lata', price_cents: 800 },
-    { id: 'prod_3', tenantId: 'ten_1', name: 'Cerveja artesanal', price_cents: 1800 },
-    { id: 'prod_4', tenantId: 'ten_1', name: 'Porção de batata', price_cents: 3200 },
-    { id: 'prod_5', tenantId: 'ten_1', name: 'Hambúrguer clássico', price_cents: 3800 },
+    { id: 'prod_1', tenantId: 'ten_1', name: 'Água mineral', price_cents: 500, cost_cents: 180 },
+    { id: 'prod_2', tenantId: 'ten_1', name: 'Refrigerante lata', price_cents: 800, cost_cents: 320 },
+    { id: 'prod_3', tenantId: 'ten_1', name: 'Cerveja artesanal', price_cents: 1800, cost_cents: 720 },
+    { id: 'prod_4', tenantId: 'ten_1', name: 'Porção de batata', price_cents: 3200, cost_cents: 950 },
+    { id: 'prod_5', tenantId: 'ten_1', name: 'Hambúrguer clássico', price_cents: 3800, cost_cents: 1400 },
   ];
 
   for (const p of products) {
     await prisma.product.upsert({
       where: { id: p.id },
-      update: { price_cents: p.price_cents },
+      update: { price_cents: p.price_cents, cost_cents: p.cost_cents },
       create: p,
     });
   }

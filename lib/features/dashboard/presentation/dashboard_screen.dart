@@ -7,6 +7,7 @@ import '../../orders/presentation/orders_screen.dart';
 import '../../orders/presentation/kds_screen.dart';
 import '../../tenant/presentation/tenant_switch_screen.dart';
 import '../../orders/presentation/catalog_manager_screen.dart';
+import '../../management/presentation/management_screen.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -126,6 +127,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 MaterialPageRoute(builder: (_) => const CatalogManagerScreen()),
               ),
             ),
+            if (role == 'manager')
+              IconButton(
+                tooltip: 'Gestão e relatórios',
+                icon: const Icon(Icons.dashboard_customize_outlined),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const ManagementScreen()),
+                ),
+              ),
             IconButton(
               tooltip: 'Trocar empresa',
               icon: const Icon(Icons.swap_horiz),

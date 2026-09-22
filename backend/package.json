@@ -7,7 +7,7 @@
     "start:dev": "ts-node-dev --respawn src/main.ts",
     "prisma:seed": "ts-node prisma/seed.ts",
     "migrate:passwords": "ts-node src/migrate-passwords.ts",
-    "test": "ts-node src/idempotency.test.ts && ts-node src/security.test.ts && ts-node src/concurrency-financial.test.ts && ts-node src/rbac.test.ts && ts-node src/financial-settlement.test.ts && ts-node src/catalog-tables.test.ts && ts-node src/e2e-protocol.test.ts",
+    "test": "ts-node src/idempotency.test.ts && ts-node src/security.test.ts && ts-node src/concurrency-financial.test.ts && ts-node src/rbac.test.ts && ts-node src/financial-settlement.test.ts && ts-node src/catalog-tables.test.ts && ts-node src/management-platform.test.ts && ts-node src/e2e-protocol.test.ts",
     "test:idempotency": "ts-node src/idempotency.test.ts",
     "test:security": "ts-node src/security.test.ts"
   },

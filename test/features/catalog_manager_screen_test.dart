@@ -37,6 +37,9 @@ class FakeCatalogRepository extends CatalogRepository {
     required String id,
     required String name,
     required int priceCents,
+    int? costCents,
+    bool? stockControlled,
+    num? minimumStock,
     String? categoryId,
     required bool available,
     required int sortOrder,
@@ -77,7 +80,7 @@ void main() {
 
     expect(find.text('Catálogo e mesas'), findsOneWidget);
     expect(find.text('Suco Natural'), findsOneWidget);
-    expect(find.text('R\$ 12,00'), findsOneWidget);
+    expect(find.textContaining('R\$ 12,00'), findsOneWidget);
     expect(find.text('Mesa 01'), findsOneWidget);
     expect(find.text('Restaurar'), findsOneWidget);
 

@@ -282,7 +282,9 @@ class _KdsScreenState extends ConsumerState<KdsScreen> {
                                       padding: const EdgeInsets.symmetric(
                                           vertical: 2),
                                       child: Text(
-                                        '• ${item.quantity}x ${item.productName}${item.notes != null ? " (${item.notes})" : ""}',
+                                        '• ${item.quantity}x ${item.productName}'
+                                        '${item.selectedOptions != null ? " — ${item.selectedOptions}" : ""}'
+                                        '${item.notes != null ? " (${item.notes})" : ""}',
                                         style: const TextStyle(fontSize: 13),
                                       ),
                                     )),

@@ -25,17 +25,27 @@ class CatalogProduct extends Equatable {
   final String id;
   final String name;
   final int priceCents;
+  final int costCents;
+  final bool stockControlled;
+  final num stockQuantity;
+  final num minimumStock;
+  final String unit;
   final String? categoryId;
   final bool active;
   final bool available;
   final int sortOrder;
 
-  const CatalogProduct({required this.id, required this.name, required this.priceCents, required this.active, required this.available, required this.sortOrder, this.categoryId});
+  const CatalogProduct({required this.id, required this.name, required this.priceCents, required this.active, required this.available, required this.sortOrder, this.categoryId, this.costCents = 0, this.stockControlled = false, this.stockQuantity = 0, this.minimumStock = 0, this.unit = 'unit'});
 
   factory CatalogProduct.fromJson(Map<String, dynamic> json) => CatalogProduct(
     id: json['id'].toString(),
     name: json['name'].toString(),
     priceCents: json['price_cents'] as int,
+    costCents: json['cost_cents'] as int? ?? 0,
+    stockControlled: json['stock_controlled'] as bool? ?? false,
+    stockQuantity: num.tryParse(json['stock_quantity']?.toString() ?? '') ?? 0,
+    minimumStock: num.tryParse(json['minimum_stock']?.toString() ?? '') ?? 0,
+    unit: json['unit'] as String? ?? 'unit',
     categoryId: json['categoryId'] as String?,
     active: json['active'] as bool? ?? true,
     available: json['available'] as bool? ?? true,
@@ -43,7 +53,7 @@ class CatalogProduct extends Equatable {
   );
 
   @override
-  List<Object?> get props => [id, name, priceCents, categoryId, active, available, sortOrder];
+  List<Object?> get props => [id, name, priceCents, costCents, categoryId, active, available, sortOrder, stockControlled, stockQuantity, minimumStock, unit];
 }
 
 class DiningTableModel extends Equatable {

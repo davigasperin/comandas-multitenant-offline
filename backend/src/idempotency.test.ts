@@ -69,13 +69,14 @@ async function run() {
 
   // Teste de autenticação do gateway e associação à empresa
   const testSecret = '1234567890123456789012345678901234567890';
+  const allowedOrigin = (process.env.CORS_ORIGINS ?? 'http://localhost:3000').split(',')[0].trim();
   const jwt = new JwtService({ secret: testSecret });
   const realGateway = new OrdersGateway(jwt, prisma);
 
   let disconnected = false;
   let joinedRoom: string | null = null;
   const mockClient: any = {
-    handshake: { headers: { origin: 'http://localhost:3000' }, auth: { token: 'invalid_token', tenantId: tenantId } },
+    handshake: { headers: { origin: allowedOrigin }, auth: { token: 'invalid_token', tenantId: tenantId } },
     data: {},
     join: async (room: string) => { joinedRoom = room; },
     disconnect: () => { disconnected = true; },
@@ -105,7 +106,7 @@ async function run() {
   let validDisconnected = false;
   let validJoinedRoom: string | null = null;
   const mockValidClient: any = {
-    handshake: { headers: { origin: 'http://localhost:3000' }, auth: { token: validToken, tenantId: tenantId } },
+    handshake: { headers: { origin: allowedOrigin }, auth: { token: validToken, tenantId: tenantId } },
     data: {},
     join: async (room: string) => { validJoinedRoom = room; },
     disconnect: () => { validDisconnected = true; },

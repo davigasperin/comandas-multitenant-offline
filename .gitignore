@@ -18,6 +18,7 @@ backend/node_modules/
 backend/dist/
 backend/.env
 backend/.env.*
+!backend/.env.example
 backend/*.log
 backend/prisma/*.db
 backend/prisma/*.db-journal
@@ -25,3 +26,9 @@ backend/*.db
 backend/*.db-journal
 # Widget Preview related
 .widget_preview/
+
+# Local bundle & offline setup helpers
+historico/
+preparar-local.cjs
+LEIA-ME-TESTE-LOCAL.md
+

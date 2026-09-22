@@ -1,10 +1,14 @@
-import { IsArray, IsBoolean, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateOrderDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'table_label é obrigatório' })
-  table_label!: string;
+  table_label?: string;
+
+  @IsOptional()
+  @IsIn(['table', 'quick_sale', 'takeaway', 'delivery'])
+  order_type?: string;
 
   @IsOptional()
   @IsString()
@@ -76,6 +80,15 @@ export class SettleOrderDto {
   discount_cents?: number;
 
   @IsOptional()
+  @IsIn(['fixed', 'percent'])
+  discount_type?: string;
+
+  @ValidateIf((body: SettleOrderDto) => body.discount_type !== undefined)
+  @IsInt()
+  @Min(0)
+  discount_value?: number;
+
+  @IsOptional()
   @IsInt()
   @Min(0)
   service_fee_bps?: number;
@@ -101,6 +114,15 @@ export class CloseOrderDto {
   @IsInt()
   @Min(0)
   discount_cents?: number;
+
+  @IsOptional()
+  @IsIn(['fixed', 'percent'])
+  discount_type?: string;
+
+  @ValidateIf((body: CloseOrderDto) => body.discount_type !== undefined)
+  @IsInt()
+  @Min(0)
+  discount_value?: number;
 
   @IsOptional()
   @IsInt()
@@ -178,6 +200,27 @@ export class CreateProductDto {
   price_cents!: number;
 
   @IsOptional()
+  @IsInt()
+  @Min(0)
+  cost_cents?: number;
+
+  @IsOptional()
+  @IsString()
+  sku?: string;
+
+  @IsOptional()
+  @IsIn(['unit', 'kg', 'g', 'l', 'ml', 'portion'])
+  unit?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  stock_controlled?: boolean;
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 3 })
+  minimum_stock?: number;
+
+  @IsOptional()
   @IsString()
   category_id?: string;
 
@@ -203,6 +246,27 @@ export class UpdateProductDto {
   @IsInt()
   @Min(0)
   price_cents?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  cost_cents?: number;
+
+  @IsOptional()
+  @IsString()
+  sku?: string;
+
+  @IsOptional()
+  @IsIn(['unit', 'kg', 'g', 'l', 'ml', 'portion'])
+  unit?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  stock_controlled?: boolean;
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 3 })
+  minimum_stock?: number;
 
   @IsOptional()
   @IsString()

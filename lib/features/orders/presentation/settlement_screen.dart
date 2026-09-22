@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/network/providers.dart';
 import '../domain/order_model.dart';
@@ -43,6 +44,7 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
   final TextEditingController _discountController = TextEditingController();
   final TextEditingController _serviceFeeController =
       TextEditingController(text: '10');
+  String _discountType = 'fixed';
 
   List<PaymentRowItem> _payments = [];
   SettlementPreview? _preview;
@@ -140,20 +142,32 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
       _errorMessage = null;
     });
 
-    final discountCents = _parseBrlToCents(_discountController.text);
+    final discountValue = _discountType == 'fixed'
+        ? _parseBrlToCents(_discountController.text)
+        : _parsePercentageToBps(_discountController.text);
     final serviceFeeBps = _parsePercentageToBps(_serviceFeeController.text);
 
     try {
       final preview =
           await ref.read(ordersRepositoryProvider).previewSettlement(
                 orderId: widget.order.id,
-                discountCents: discountCents,
+                discountCents: _discountType == 'fixed' ? discountValue : 0,
+                discountType: _discountType,
+                discountValue: discountValue,
                 serviceFeeBps: serviceFeeBps,
               );
       if (mounted) {
         setState(() {
           _preview = preview;
           _isLoadingPreview = false;
+          if (_payments.length == 1) {
+            _payments.first.amountCents = preview.totalCents;
+            _payments.first.tenderedCents = preview.totalCents;
+            _payments.first.amountController.text =
+                _formatCents(preview.totalCents);
+            _payments.first.tenderedController.text =
+                _formatCents(preview.totalCents);
+          }
         });
       }
     } catch (e) {
@@ -219,7 +233,9 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
     _lockedIdempotencyKey ??=
         'idemp_settle_${widget.order.id}_${DateTime.now().microsecondsSinceEpoch}_${Random().nextInt(999999)}';
 
-    final discountCents = _parseBrlToCents(_discountController.text);
+    final discountValue = _discountType == 'fixed'
+        ? _parseBrlToCents(_discountController.text)
+        : _parsePercentageToBps(_discountController.text);
     final serviceFeeBps = _parsePercentageToBps(_serviceFeeController.text);
     final paymentsPayload = _payments.map((p) {
       return {
@@ -233,7 +249,9 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
       final success = await ref.read(ordersRepositoryProvider).settleOrder(
             orderId: widget.order.id,
             payments: paymentsPayload,
-            discountCents: discountCents,
+            discountCents: _discountType == 'fixed' ? discountValue : 0,
+            discountType: _discountType,
+            discountValue: discountValue,
             serviceFeeBps: serviceFeeBps,
             expectedVersion: widget.order.version,
             idempotencyKey: _lockedIdempotencyKey,
@@ -267,6 +285,65 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Erro na liquidação: $e')),
       );
+    }
+  }
+
+  Future<void> _generatePixCharge() async {
+    if (_payments.length != 1 || _payments.first.method != 'pix') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Para o Pix automático, use uma única forma de pagamento Pix.')),
+      );
+      return;
+    }
+    final discountValue = _discountType == 'fixed'
+        ? _parseBrlToCents(_discountController.text)
+        : _parsePercentageToBps(_discountController.text);
+    final serviceFeeBps = _parsePercentageToBps(_serviceFeeController.text);
+    setState(() => _isSubmitting = true);
+    try {
+      final charge = await ref.read(ordersRepositoryProvider).createPixCharge(
+            orderId: widget.order.id,
+            expectedVersion: widget.order.version,
+            discountCents: _discountType == 'fixed' ? discountValue : 0,
+            discountType: _discountType,
+            discountValue: discountValue,
+            serviceFeeBps: serviceFeeBps,
+          );
+      if (!mounted) return;
+      final payload = charge['copy_paste']?.toString() ?? '';
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Cobrança Pix criada'),
+          content: SelectableText(payload),
+          actions: [
+            TextButton.icon(
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: payload));
+                if (dialogContext.mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(content: Text('Pix copia e cola copiado.')),
+                  );
+                }
+              },
+              icon: const Icon(Icons.copy),
+              label: const Text('Copiar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Fechar'),
+            ),
+          ],
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao gerar Pix: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
@@ -338,15 +415,48 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
                     const SizedBox(height: 12),
                     Row(
                       children: [
+                        SizedBox(
+                          width: 118,
+                          child: DropdownButtonFormField<String>(
+                            initialValue: _discountType,
+                            decoration: const InputDecoration(
+                              labelText: 'Desconto',
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'fixed',
+                                child: Text('R\$'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'percent',
+                                child: Text('%'),
+                              ),
+                            ],
+                            onChanged: (value) {
+                              if (value == null) return;
+                              setState(() {
+                                _discountType = value;
+                                _discountController.clear();
+                              });
+                              _fetchPreview();
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: TextField(
                             controller: _discountController,
                             keyboardType: const TextInputType.numberWithOptions(
                                 decimal: true),
-                            decoration: const InputDecoration(
-                              labelText: 'Desconto (R\$)',
+                            decoration: InputDecoration(
+                              labelText: _discountType == 'fixed'
+                                  ? 'Valor do desconto'
+                                  : 'Percentual',
                               hintText: '0,00',
-                              prefixText: 'R\$ ',
+                              prefixText:
+                                  _discountType == 'fixed' ? 'R\$ ' : null,
+                              suffixText:
+                                  _discountType == 'percent' ? '%' : null,
                             ),
                             onChanged: (_) => _fetchPreview(),
                           ),
@@ -437,6 +547,14 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
                 ),
               ),
             ),
+            if (_payments.length == 1 && _payments.first.method == 'pix') ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _isSubmitting ? null : _generatePixCharge,
+                icon: const Icon(Icons.qr_code_2),
+                label: const Text('Gerar cobrança Pix automática'),
+              ),
+            ],
             const SizedBox(height: 16),
             Card(
               child: Padding(

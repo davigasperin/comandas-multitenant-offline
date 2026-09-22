@@ -14,61 +14,84 @@ model User {
   password      String
   tenants       UserTenant[]
   refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
   createdAt     DateTime       @default(now())
 }
 
 model Tenant {
-  id          String         @id @default(cuid())
-  name        String
-  role        String
-  logo_url    String?
-  users       UserTenant[]
-  categories  Category[]
-  products    Product[]
-  tables      DiningTable[]
-  orders      Order[]
-  idempotency IdempotencyKey[]
-  createdAt   DateTime       @default(now())
+  id                         String                     @id @default(cuid())
+  name                       String
+  role                       String
+  logo_url                   String?
+  cashier_discount_limit_bps Int                        @default(10000)
+  users                      UserTenant[]
+  categories                 Category[]
+  products                   Product[]
+  tables                     DiningTable[]
+  orders                     Order[]
+  idempotency                IdempotencyKey[]
+  suppliers                  Supplier[]
+  purchases                  Purchase[]
+  stockMovements             StockMovement[]
+  expenseCategories          ExpenseCategory[]
+  payableExpenses            PayableExpense[]
+  recurringExpenses          RecurringExpenseTemplate[]
+  subscriptions              TenantSubscription[]
+  pixCharges                 PixCharge[]
+  auditLogs                  AuditLog[]
+  printerSettings            PrinterSetting?
+  createdAt                  DateTime                   @default(now())
 }
 
 model UserTenant {
   userId   String
   tenantId String
   role     String
-  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  active   Boolean @default(true)
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@id([userId, tenantId])
   @@index([tenantId])
 }
 
 model Category {
-  id              String         @id @default(cuid())
+  id              String    @id @default(cuid())
   tenantId        String
   name            String
-  sort_order      Int            @default(0)
-  active          Boolean        @default(true)
-  production_area String         @default("kitchen") // kitchen, bar, dessert, none
-  tenant          Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sort_order      Int       @default(0)
+  active          Boolean   @default(true)
+  production_area String    @default("kitchen") // kitchen, bar, dessert, none
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   products        Product[]
-  createdAt       DateTime       @default(now())
+  createdAt       DateTime  @default(now())
 
   @@index([tenantId, active])
 }
 
 model Product {
-  id          String    @id @default(cuid())
-  tenantId    String
-  categoryId  String?
-  name        String
-  price_cents Int
-  active      Boolean   @default(true)
-  available   Boolean   @default(true)
-  sort_order  Int       @default(0)
-  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  createdAt   DateTime  @default(now())
+  id               String          @id @default(cuid())
+  tenantId         String
+  categoryId       String?
+  name             String
+  price_cents      Int
+  cost_cents       Int             @default(0)
+  sku              String?
+  unit             String          @default("unit")
+  stock_controlled Boolean         @default(false)
+  stock_quantity   Decimal         @default(0)
+  minimum_stock    Decimal         @default(0)
+  active           Boolean         @default(true)
+  available        Boolean         @default(true)
+  sort_order       Int             @default(0)
+  tenant           Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category         Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  orderItems       OrderItem[]
+  purchaseItems    PurchaseItem[]
+  stockMovements   StockMovement[]
+  createdAt        DateTime        @default(now())
 
+  @@unique([tenantId, sku])
   @@index([tenantId, active])
   @@index([categoryId])
 }
@@ -92,26 +115,31 @@ model DiningTable {
 }
 
 model Order {
-  id                String               @id @default(cuid())
-  tenantId          String
-  tableId           String?
-  table_label       String
-  status            String               @default("open")
-  version           Int                  @default(1)
-  subtotal_cents    Int                  @default(0)
-  discount_cents    Int                  @default(0)
-  service_fee_bps   Int                  @default(1000)
-  service_fee_cents Int                  @default(0)
-  total_cents       Int                  @default(0)
-  settled_at        DateTime?
-  settled_by        String?
-  opened_at         DateTime             @default(now())
-  updated_at        DateTime             @default(now()) @updatedAt
-  tenant            Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  table             DiningTable?         @relation(fields: [tableId], references: [id], onDelete: SetNull)
-  items             OrderItem[]
-  payments          OrderPayment[]
-  history           OrderStatusHistory[]
+  id                     String               @id @default(cuid())
+  tenantId               String
+  tableId                String?
+  table_label            String
+  order_type             String               @default("table") // table, quick_sale, takeaway, delivery
+  status                 String               @default("open")
+  version                Int                  @default(1)
+  subtotal_cents         Int                  @default(0)
+  discount_cents         Int                  @default(0)
+  discount_type          String? // fixed, percent
+  discount_value         Int? // cents for fixed, basis points for percent
+  discount_authorized_by String?
+  service_fee_bps        Int                  @default(1000)
+  service_fee_cents      Int                  @default(0)
+  total_cents            Int                  @default(0)
+  settled_at             DateTime?
+  settled_by             String?
+  opened_at              DateTime             @default(now())
+  updated_at             DateTime             @default(now()) @updatedAt
+  tenant                 Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  table                  DiningTable?         @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  items                  OrderItem[]
+  payments               OrderPayment[]
+  pixCharges             PixCharge[]
+  history                OrderStatusHistory[]
 
   @@index([tenantId, status])
   @@index([tenantId, opened_at])
@@ -119,26 +147,33 @@ model Order {
 }
 
 model OrderItem {
-  id               String  @id @default(cuid())
+  id               String   @id @default(cuid())
   orderId          String
+  productId        String?
   product_name     String
   quantity         Int
   unit_price_cents Int
+  unit_cost_cents  Int      @default(0)
+  selected_options String?
   notes            String?
-  order            Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order            Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product          Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@index([orderId])
+  @@index([productId])
 }
 
 model OrderPayment {
-  id             String   @id @default(cuid())
+  id             String     @id @default(cuid())
   orderId        String
-  method         String   // cash, pix, credit, debit, voucher
+  method         String // cash, pix, credit, debit, voucher
   amount_cents   Int
   tendered_cents Int?
-  change_cents   Int      @default(0)
-  created_at     DateTime @default(now())
-  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  change_cents   Int        @default(0)
+  created_at     DateTime   @default(now())
+  pixChargeId    String?    @unique
+  order          Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  pixCharge      PixCharge? @relation(fields: [pixChargeId], references: [id], onDelete: SetNull)
 
   @@index([orderId])
 }
@@ -179,5 +214,229 @@ model RefreshToken {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
+  @@index([userId])
+}
+
+model Supplier {
+  id                       String                     @id @default(cuid())
+  tenantId                 String
+  name                     String
+  trade_name               String?
+  document                 String?
+  phone                    String?
+  email                    String?
+  notes                    String?
+  active                   Boolean                    @default(true)
+  tenant                   Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  purchases                Purchase[]
+  expenses                 PayableExpense[]
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime                   @updatedAt
+  RecurringExpenseTemplate RecurringExpenseTemplate[]
+
+  @@unique([tenantId, document])
+  @@index([tenantId, active])
+}
+
+model Purchase {
+  id               String          @id @default(cuid())
+  tenantId         String
+  supplierId       String?
+  document_no      String?
+  status           String          @default("draft") // draft, confirmed, canceled
+  purchased_at     DateTime
+  total_cents      Int             @default(0)
+  notes            String?
+  created_by       String?
+  confirmed_at     DateTime?
+  payableExpenseId String?         @unique
+  tenant           Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier         Supplier?       @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  items            PurchaseItem[]
+  payableExpense   PayableExpense? @relation(fields: [payableExpenseId], references: [id], onDelete: SetNull)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([tenantId, purchased_at])
+  @@index([supplierId])
+}
+
+model PurchaseItem {
+  id              String   @id @default(cuid())
+  purchaseId      String
+  productId       String
+  quantity        Decimal
+  unit_cost_cents Int
+  total_cents     Int
+  purchase        Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([purchaseId])
+  @@index([productId])
+}
+
+model StockMovement {
+  id              String   @id @default(cuid())
+  tenantId        String
+  productId       String
+  type            String // purchase, sale, adjustment_in, adjustment_out, cancellation, return
+  quantity        Decimal // signed quantity: positive enters, negative leaves
+  unit_cost_cents Int?
+  reference_type  String?
+  reference_id    String?
+  notes           String?
+  created_by      String?
+  occurred_at     DateTime @default(now())
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, type, reference_type, reference_id, productId])
+  @@index([tenantId, occurred_at])
+  @@index([productId, occurred_at])
+}
+
+model ExpenseCategory {
+  id                 String                     @id @default(cuid())
+  tenantId           String
+  name               String
+  active             Boolean                    @default(true)
+  tenant             Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  expenses           PayableExpense[]
+  recurringTemplates RecurringExpenseTemplate[]
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+
+  @@unique([tenantId, name])
+  @@index([tenantId, active])
+}
+
+model PayableExpense {
+  id                  String                    @id @default(cuid())
+  tenantId            String
+  supplierId          String?
+  categoryId          String
+  recurringTemplateId String?
+  description         String
+  amount_cents        Int
+  due_date            DateTime
+  competence_date     DateTime
+  notes               String?
+  canceled_at         DateTime?
+  created_by          String?
+  tenant              Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier            Supplier?                 @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  category            ExpenseCategory           @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  recurringTemplate   RecurringExpenseTemplate? @relation(fields: [recurringTemplateId], references: [id], onDelete: SetNull)
+  payments            ExpensePayment[]
+  purchases           Purchase[]
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+
+  @@unique([tenantId, recurringTemplateId, competence_date])
+  @@index([tenantId, due_date])
+  @@index([tenantId, competence_date])
+  @@index([supplierId])
+  @@index([categoryId])
+}
+
+model ExpensePayment {
+  id             String         @id @default(cuid())
+  expenseId      String
+  amount_cents   Int
+  paid_at        DateTime
+  payment_method String?
+  notes          String?
+  created_by     String?
+  expense        PayableExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  createdAt      DateTime       @default(now())
+
+  @@index([expenseId, paid_at])
+}
+
+model RecurringExpenseTemplate {
+  id                String           @id @default(cuid())
+  tenantId          String
+  categoryId        String
+  supplierId        String?
+  description       String
+  amount_cents      Int
+  due_day           Int
+  start_date        DateTime
+  end_date          DateTime?
+  active            Boolean          @default(true)
+  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category          ExpenseCategory  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  supplier          Supplier?        @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  generatedExpenses PayableExpense[]
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([tenantId, active])
+}
+
+model TenantSubscription {
+  id        String    @id @default(cuid())
+  tenantId  String
+  plan      String    @default("free") // free, pro
+  status    String    @default("active") // trialing, active, past_due, canceled
+  starts_at DateTime  @default(now())
+  ends_at   DateTime?
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([tenantId, status])
+}
+
+model PixCharge {
+  id               String        @id @default(cuid())
+  tenantId         String
+  orderId          String
+  provider         String
+  txid             String
+  amount_cents     Int
+  discount_type    String?
+  discount_value   Int?
+  discount_cents   Int           @default(0)
+  service_fee_bps  Int           @default(0)
+  qr_code          String?
+  copy_paste       String?
+  status           String        @default("pending") // pending, paid, expired, canceled, failed
+  provider_payload String?
+  expires_at       DateTime?
+  paid_at          DateTime?
+  tenant           Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  order            Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  payment          OrderPayment?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@unique([tenantId, txid])
+  @@index([orderId, status])
+}
+
+model PrinterSetting {
+  id           String   @id @default(cuid())
+  tenantId     String   @unique
+  paper_width  Int      @default(80)
+  printer_name String?
+  protocol     String   @default("system_spooler")
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  updatedAt    DateTime @updatedAt
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  tenantId    String
+  userId      String?
+  action      String
+  entity_type String
+  entity_id   String?
+  metadata    String?
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, createdAt])
   @@index([userId])
 }
