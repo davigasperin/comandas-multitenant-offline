@@ -35,7 +35,12 @@ async function runSecurityTests() {
   console.log('2. Testando configuração de ambiente do JWT...');
   assert.throws(() => validateJwtSecret(undefined), /JWT_SECRET/, 'Missing JWT_SECRET must throw');
   assert.throws(() => validateJwtSecret('short-secret'), /deve ter pelo menos 32 bytes/, 'Short JWT_SECRET must throw');
-  const validSecret = '1234567890123456789012345678901234567890';
+  assert.throws(
+    () => validateJwtSecret('troque-por-um-segredo-com-pelo-menos-32-bytes'),
+    /valor padrão de exemplo não permitido/,
+    'Example JWT secret must throw',
+  );
+  const validSecret = crypto.randomBytes(32).toString('hex');
   assert.strictEqual(validateJwtSecret(validSecret), validSecret, 'Valid secret >= 32 bytes must pass');
 
   // 3. CORS Origin Validation Tests

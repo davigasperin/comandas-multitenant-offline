@@ -1,7 +1,17 @@
+const FORBIDDEN_JWT_SECRETS = new Set([
+  'troque-por-um-segredo-com-pelo-menos-32-bytes',
+  '1234567890123456789012345678901234567890',
+  'secret-key-123456789012345678901234567890',
+]);
+
 export function validateJwtSecret(secret: string | undefined): string {
   if (!secret) throw new Error('JWT_SECRET é obrigatório');
-  if (Buffer.byteLength(secret, 'utf8') < 32) throw new Error('JWT_SECRET deve ter pelo menos 32 bytes');
-  return secret;
+  const trimmed = secret.trim();
+  if (Buffer.byteLength(trimmed, 'utf8') < 32) throw new Error('JWT_SECRET deve ter pelo menos 32 bytes');
+  if (FORBIDDEN_JWT_SECRETS.has(trimmed)) {
+    throw new Error('JWT_SECRET inseguro: valor padrão de exemplo não permitido');
+  }
+  return trimmed;
 }
 
 export function parseCorsOrigins(value: string | undefined): ReadonlySet<string> {
