@@ -38,6 +38,15 @@ async function runE2eSuite() {
   const { NestFactory } = await import('@nestjs/core');
 
   const app: INestApplication = await NestFactory.create(AppModule, { cors: getCorsOptions(process.env.CORS_ORIGINS) });
+  app.use((req: any, res: any, next: () => void) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+    if (req.secure) res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    next();
+  });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
 
   await app.listen(0);
@@ -113,6 +122,9 @@ async function runE2eSuite() {
       headers: { Origin: 'http://localhost:3000' },
     });
     assert.strictEqual(corsAllowedRes.headers.get('access-control-allow-origin'), 'http://localhost:3000');
+    assert.strictEqual(corsAllowedRes.headers.get('x-content-type-options'), 'nosniff');
+    assert.strictEqual(corsAllowedRes.headers.get('x-frame-options'), 'DENY');
+    assert.strictEqual(corsAllowedRes.headers.get('referrer-policy'), 'no-referrer');
 
     const corsDeniedRes = await fetch(`${baseUrl}/health`, {
       method: 'GET',

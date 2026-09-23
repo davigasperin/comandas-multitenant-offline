@@ -3,12 +3,13 @@ import * as crypto from 'node:crypto';
 import { ValidationPipe, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { hashPassword, verifyPassword, generateRefreshToken, hashToken } from './auth.utils';
-import { validateJwtSecret, getCorsOriginValidator } from './config.utils';
+import { validateJwtSecret, getCorsOriginValidator, shouldEnableSwagger } from './config.utils';
 import { PrismaService } from './prisma.service';
 import { AuthService } from './auth.service';
 import { migratePlaintextPasswords } from './migrate-passwords';
 import { LoginDto, RefreshTokenDto } from './dto/auth.dto';
 import { CreateOrderDto, AddItemDto, UpdateOrderStatusDto } from './dto/orders.dto';
+import { verifyPixWebhookSignature } from './pix.controller';
 
 async function runSecurityTests() {
   console.log('Iniciando suíte abrangente de segurança P0 e integração...');
@@ -35,8 +36,15 @@ async function runSecurityTests() {
   console.log('2. Testando configuração de ambiente do JWT...');
   assert.throws(() => validateJwtSecret(undefined), /JWT_SECRET/, 'Missing JWT_SECRET must throw');
   assert.throws(() => validateJwtSecret('short-secret'), /deve ter pelo menos 32 bytes/, 'Short JWT_SECRET must throw');
-  const validSecret = '1234567890123456789012345678901234567890';
+  assert.throws(
+    () => validateJwtSecret('troque-por-um-segredo-com-pelo-menos-32-bytes'),
+    /valor padrão de exemplo não permitido/,
+    'Example JWT secret must throw',
+  );
+  const validSecret = crypto.randomBytes(32).toString('hex');
   assert.strictEqual(validateJwtSecret(validSecret), validSecret, 'Valid secret >= 32 bytes must pass');
+  assert.strictEqual(shouldEnableSwagger('production', 'true'), false, 'Swagger must remain disabled in production');
+  assert.strictEqual(shouldEnableSwagger('development', 'true'), true, 'Swagger can be enabled outside production');
 
   // 3. CORS Origin Validation Tests
   console.log('3. Testando validação de origem CORS...');
@@ -44,6 +52,23 @@ async function runSecurityTests() {
   assert.strictEqual(corsChecker(undefined), true, 'Non-browser / mobile requests must be allowed');
   assert.strictEqual(corsChecker('http://localhost:3000'), true, 'Allowed origin must return true');
   assert.strictEqual(corsChecker('http://malicious-site.com'), false, 'Unauthorized origin must return false');
+
+  const provider = 'test-provider';
+  const webhookSecret = crypto.randomBytes(32).toString('hex');
+  process.env.PIX_WEBHOOK_SECRET_TEST_PROVIDER = webhookSecret;
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const rawBody = Buffer.from('{"txid":"tx1","status":"paid"}');
+  const signature = crypto.createHmac('sha256', webhookSecret).update(`${timestamp}.`).update(rawBody).digest('hex');
+  assert.doesNotThrow(() => verifyPixWebhookSignature({ provider, rawBody, timestamp, signature }));
+  assert.throws(
+    () => verifyPixWebhookSignature({ provider, rawBody: Buffer.from('{}'), timestamp, signature }),
+    /não autorizado/,
+  );
+  assert.throws(
+    () => verifyPixWebhookSignature({ provider, rawBody, timestamp: String(Number(timestamp) - 301), signature }),
+    /não autorizado/,
+  );
+  delete process.env.PIX_WEBHOOK_SECRET_TEST_PROVIDER;
 
   // 4. DTO ValidationPipe Tests
   console.log('4. Testando pipe de validação dos DTOs em tempo de execução...');

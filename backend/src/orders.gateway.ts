@@ -47,21 +47,27 @@ export class OrdersGateway implements OnGatewayConnection {
       const access = await this.prisma.userTenant.findUnique({
         where: { userId_tenantId: { userId: payload.sub, tenantId } },
       });
-       if (!access) throw new Error('Acesso ao tenant negado');
-       const roleAliases: Record<string, string> = { owner: 'manager', admin: 'manager' };
-       const role = roleAliases[access.role] ?? access.role;
-       if (!['waiter', 'kitchen', 'cashier', 'manager'].includes(role)) {
-         throw new Error('Perfil operacional desconhecido');
-       }
+      if (!access || !access.active) throw new Error('Acesso ao tenant negado');
+      const roleAliases: Record<string, string> = { owner: 'manager', admin: 'manager' };
+      const role = roleAliases[access.role] ?? access.role;
+      if (!['waiter', 'kitchen', 'cashier', 'manager'].includes(role)) {
+        throw new Error('Perfil operacional desconhecido');
+      }
 
-       client.data.userId = payload.sub;
-       client.data.role = role;
-
+      client.data.userId = payload.sub;
+      client.data.role = role;
       client.data.tenantId = tenantId;
       await client.join(tenantId);
       if (typeof client.emit === 'function') client.emit('authenticated');
     } catch {
       client.disconnect(true);
+    }
+  }
+
+  async disconnectUserFromTenant(userId: string, tenantId: string): Promise<void> {
+    const sockets = await this.server.in(tenantId).fetchSockets();
+    for (const socket of sockets) {
+      if (socket.data.userId === userId) socket.disconnect(true);
     }
   }
 

@@ -8,26 +8,65 @@ import {
   NotFoundException,
   Param,
   Post,
+  Req,
   Request,
   UseGuards,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { timingSafeEqual } from 'node:crypto';
+import type { RawBodyRequest } from '@nestjs/common';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { AuthGuard } from './auth.guard';
 import { CreatePixChargeDto, PixWebhookDto } from './dto/management.dto';
-import { RequireFeature } from './feature.decorator';
 import { FeatureGuard } from './feature.guard';
 import { calculateBillTotals } from './financial.utils';
 import { OrdersGateway } from './orders.gateway';
-import { PixService } from './pix.service';
 import { PrismaService } from './prisma.service';
+import { Prisma } from '@prisma/client';
+import { PixService } from './pix.service';
+import { RequireFeature } from './feature.decorator';
 import { Roles } from './roles.decorator';
 import { RolesGuard } from './roles.guard';
 import { TenantGuard } from './tenant.guard';
 
+export function getPixWebhookSecret(provider: string): string | undefined {
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(provider)) return undefined;
+  const normalized = provider.toUpperCase().replace(/-/g, '_');
+  return process.env[`PIX_WEBHOOK_SECRET_${normalized}`];
+}
+
+export function verifyPixWebhookSignature(params: {
+  provider: string;
+  rawBody: Buffer;
+  signature?: string;
+  timestamp?: string;
+}): void {
+  const secret = getPixWebhookSecret(params.provider);
+  if (!secret) throw new ForbiddenException('Webhook Pix não autorizado');
+  if (!params.signature || !params.timestamp) {
+    throw new ForbiddenException('Webhook Pix não autorizado');
+  }
+
+  const timestampNum = Number(params.timestamp);
+  const now = Math.floor(Date.now() / 1000);
+  if (!Number.isInteger(timestampNum) || Math.abs(now - timestampNum) > 300) {
+    throw new ForbiddenException('Webhook Pix não autorizado');
+  }
+
+  const payload = Buffer.concat([Buffer.from(`${params.timestamp}.`, 'utf8'), params.rawBody]);
+  const expectedHex = createHmac('sha256', secret).update(payload).digest('hex');
+  const suppliedHex = params.signature.replace(/^sha256=/, '').trim();
+
+  const expectedBuf = Buffer.from(expectedHex, 'hex');
+  const suppliedBuf = Buffer.from(suppliedHex, 'hex');
+  if (
+    expectedBuf.length !== suppliedBuf.length ||
+    !timingSafeEqual(expectedBuf, suppliedBuf)
+  ) {
+    throw new ForbiddenException('Webhook Pix não autorizado');
+  }
+}
+
 interface RequestContext {
   tenantId: string;
-  user?: { sub: string };
 }
 
 @UseGuards(AuthGuard, TenantGuard, RolesGuard, FeatureGuard)
@@ -116,10 +155,13 @@ export class PixWebhookController {
   @Post(':provider')
   async receive(
     @Param('provider') provider: string,
-    @Headers('x-pix-webhook-secret') suppliedSecret: string | undefined,
+    @Req() req: RawBodyRequest<any>,
+    @Headers('x-pix-signature') signature: string | undefined,
+    @Headers('x-pix-timestamp') timestamp: string | undefined,
     @Body() body: PixWebhookDto,
   ) {
-    this.assertWebhookSecret(suppliedSecret);
+    const rawBody = req?.rawBody ?? Buffer.from(JSON.stringify(body), 'utf8');
+    this.assertWebhookSignature(provider, rawBody, signature, timestamp);
     const charge = await this.prisma.pixCharge.findFirst({ where: { provider, txid: body.txid } });
     if (!charge) throw new NotFoundException('Cobrança Pix não encontrada');
     if (body.amount_cents !== undefined && body.amount_cents !== charge.amount_cents) {
@@ -201,13 +243,12 @@ export class PixWebhookController {
     return { ok: true, replayed: closedOrder === null };
   }
 
-  private assertWebhookSecret(supplied: string | undefined) {
-    const expected = process.env.PIX_WEBHOOK_SECRET;
-    if (!expected || !supplied) throw new ForbiddenException('Webhook Pix não autorizado');
-    const left = Buffer.from(expected);
-    const right = Buffer.from(supplied);
-    if (left.length !== right.length || !timingSafeEqual(left, right)) {
-      throw new ForbiddenException('Webhook Pix não autorizado');
-    }
+  private assertWebhookSignature(
+    provider: string,
+    rawBody: Buffer,
+    signature: string | undefined,
+    timestamp: string | undefined,
+  ) {
+    verifyPixWebhookSignature({ provider, rawBody, signature, timestamp });
   }
 }
