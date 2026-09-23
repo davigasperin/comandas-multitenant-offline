@@ -54,4 +54,46 @@ function testRbacMatrix() {
   console.log('Validação da matriz RBAC concluída com sucesso!');
 }
 
+async function testTenantGuard() {
+  const { TenantGuard } = await import('./tenant.guard');
+  const mockPrisma: any = {
+    userTenant: {
+      findUnique: async ({ where }: any) => {
+        if (where.userId_tenantId.userId === 'inactive_user') {
+          return { role: 'waiter', active: false };
+        }
+        if (where.userId_tenantId.userId === 'active_user') {
+          return { role: 'waiter', active: true };
+        }
+        return null;
+      },
+    },
+  };
+  const guard = new TenantGuard(mockPrisma);
+
+  const activeCtx: any = {
+    switchToHttp: () => ({
+      getRequest: () => ({
+        headers: { 'x-tenant-id': 't1' },
+        user: { sub: 'active_user' },
+      }),
+    }),
+  };
+  assert.strictEqual(await guard.canActivate(activeCtx), true);
+
+  const inactiveCtx: any = {
+    switchToHttp: () => ({
+      getRequest: () => ({
+        headers: { 'x-tenant-id': 't1' },
+        user: { sub: 'inactive_user' },
+      }),
+    }),
+  };
+  await assert.rejects(() => guard.canActivate(inactiveCtx), /inativo/);
+}
+
 testRbacMatrix();
+testTenantGuard().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

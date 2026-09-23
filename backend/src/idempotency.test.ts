@@ -115,6 +115,27 @@ async function run() {
   assert.strictEqual(validDisconnected, false, 'Valid client must not disconnect');
   assert.strictEqual(validJoinedRoom, tenantId, 'Valid client must join tenant room');
 
+  await prisma.userTenant.update({
+    where: { userId_tenantId: { userId: testUserId, tenantId } },
+    data: { active: false },
+  });
+  let inactiveDisconnected = false;
+  await realGateway.handleConnection({
+    ...mockValidClient,
+    data: {},
+    disconnect: () => { inactiveDisconnected = true; },
+  });
+  assert.strictEqual(inactiveDisconnected, true, 'Inactive client must disconnect during handshake');
+
+  let revokedDisconnected = false;
+  (realGateway as any).server = {
+    in: () => ({
+      fetchSockets: async () => [{ data: { userId: testUserId }, disconnect: () => { revokedDisconnected = true; } }],
+    }),
+  };
+  await realGateway.disconnectUserFromTenant(testUserId, tenantId);
+  assert.strictEqual(revokedDisconnected, true, 'Connected client must disconnect after access revocation');
+
   console.log('Testes do controlador de pedidos, idempotência e gateway concluídos.');
   await prisma.$disconnect();
 }

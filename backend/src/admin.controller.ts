@@ -15,6 +15,7 @@ import {
 import { AuthGuard } from './auth.guard';
 import { hashPassword } from './auth.utils';
 import { CreateEmployeeDto, UpdateDiscountPolicyDto, UpdateEmployeeDto, UpdatePrinterSettingDto } from './dto/management.dto';
+import { OrdersGateway } from './orders.gateway';
 import { PrismaService } from './prisma.service';
 import { Roles } from './roles.decorator';
 import { RolesGuard } from './roles.guard';
@@ -29,7 +30,10 @@ interface RequestContext {
 @Roles('manager')
 @Controller('v1/employees')
 export class EmployeesController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ordersGateway: OrdersGateway,
+  ) {}
 
   @Get()
   async list(@Request() req: RequestContext) {
@@ -99,6 +103,9 @@ export class EmployeesController {
       where: { userId_tenantId: { userId, tenantId: req.tenantId } },
       include: { user: { select: { id: true, name: true, email: true, createdAt: true } } },
     });
+    if (body.active === false) {
+      await this.ordersGateway.disconnectUserFromTenant(userId, req.tenantId);
+    }
     return { ...updated.user, role: updated.role, active: updated.active };
   }
 
@@ -110,6 +117,7 @@ export class EmployeesController {
       data: { active: false },
     });
     if (!result.count) throw new NotFoundException('Funcionário não encontrado');
+    await this.ordersGateway.disconnectUserFromTenant(userId, req.tenantId);
     return { ok: true };
   }
 }
