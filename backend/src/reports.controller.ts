@@ -29,22 +29,33 @@ export class ReportsController {
   @Get('sales')
   async sales(@Request() req: RequestContext, @Query('from') from?: string, @Query('to') to?: string) {
     const { start, end } = range(from, to);
-    const orders = await this.prisma.order.findMany({
+    const aggregates = await this.prisma.order.aggregate({
       where: { tenantId: req.tenantId, status: 'closed', settled_at: { gte: start, lte: end } },
-      include: { payments: true },
+      _count: { id: true },
+      _sum: {
+        subtotal_cents: true,
+        discount_cents: true,
+        service_fee_cents: true,
+        total_cents: true,
+      },
+    });
+    const payments = await this.prisma.orderPayment.groupBy({
+      by: ['method'],
+      where: { order: { tenantId: req.tenantId, status: 'closed', settled_at: { gte: start, lte: end } } },
+      _sum: { amount_cents: true },
     });
     const paymentMethods: Record<string, number> = {};
-    for (const order of orders) {
-      for (const payment of order.payments) paymentMethods[payment.method] = (paymentMethods[payment.method] ?? 0) + payment.amount_cents;
+    for (const payment of payments) {
+      paymentMethods[payment.method] = payment._sum.amount_cents ?? 0;
     }
     return {
       from: start,
       to: end,
-      orders: orders.length,
-      gross_revenue_cents: orders.reduce((sum, order) => sum + order.subtotal_cents, 0),
-      discounts_cents: orders.reduce((sum, order) => sum + order.discount_cents, 0),
-      service_fees_cents: orders.reduce((sum, order) => sum + order.service_fee_cents, 0),
-      received_cents: orders.reduce((sum, order) => sum + order.total_cents, 0),
+      orders: aggregates._count.id,
+      gross_revenue_cents: aggregates._sum.subtotal_cents ?? 0,
+      discounts_cents: aggregates._sum.discount_cents ?? 0,
+      service_fees_cents: aggregates._sum.service_fee_cents ?? 0,
+      received_cents: aggregates._sum.total_cents ?? 0,
       payment_methods: paymentMethods,
     };
   }
@@ -61,19 +72,27 @@ export class ReportsController {
     if (!['competence', 'payment'].includes(axis)) throw new BadRequestException('Eixo deve ser competence ou payment');
     const byCategory: Record<string, { category_id: string; category: string; amount_cents: number }> = {};
     if (axis === 'competence') {
-      const expenses = await this.prisma.payableExpense.findMany({
+      const grouped = await this.prisma.payableExpense.groupBy({
+        by: ['categoryId'],
         where: { tenantId: req.tenantId, canceled_at: null, competence_date: { gte: start, lte: end } },
-        include: { category: true },
+        _sum: { amount_cents: true },
       });
-      for (const expense of expenses) {
-        const row = byCategory[expense.categoryId] ?? { category_id: expense.categoryId, category: expense.category.name, amount_cents: 0 };
-        row.amount_cents += expense.amount_cents;
-        byCategory[expense.categoryId] = row;
+      const categories = await this.prisma.expenseCategory.findMany({
+        where: { tenantId: req.tenantId, id: { in: grouped.map((g) => g.categoryId) } },
+        select: { id: true, name: true },
+      });
+      const catMap = new Map(categories.map((c) => [c.id, c.name]));
+      for (const row of grouped) {
+        byCategory[row.categoryId] = {
+          category_id: row.categoryId,
+          category: catMap.get(row.categoryId) ?? '',
+          amount_cents: row._sum.amount_cents ?? 0,
+        };
       }
     } else {
       const payments = await this.prisma.expensePayment.findMany({
         where: { paid_at: { gte: start, lte: end }, expense: { tenantId: req.tenantId, canceled_at: null } },
-        include: { expense: { include: { category: true } } },
+        include: { expense: { select: { categoryId: true, category: { select: { name: true } } } } },
       });
       for (const payment of payments) {
         const expense = payment.expense;
@@ -99,20 +118,27 @@ export class ReportsController {
     if (!['product_cost', 'purchases'].includes(cmvMode)) throw new BadRequestException('cmv_mode inválido');
     if (!['competence', 'payment'].includes(expenseAxis)) throw new BadRequestException('expense_axis inválido');
 
-    const orders = await this.prisma.order.findMany({
+    const orderAggregates = await this.prisma.order.aggregate({
       where: { tenantId: req.tenantId, status: 'closed', settled_at: { gte: start, lte: end } },
-      include: { items: true },
+      _sum: { subtotal_cents: true, discount_cents: true },
     });
-    const revenueCents = orders.reduce((sum, order) => sum + order.subtotal_cents, 0);
-    const discountsCents = orders.reduce((sum, order) => sum + order.discount_cents, 0);
+    const revenueCents = orderAggregates._sum.subtotal_cents ?? 0;
+    const discountsCents = orderAggregates._sum.discount_cents ?? 0;
     const netRevenueCents = revenueCents - discountsCents;
 
     let cmvCents = 0;
     if (cmvMode === 'product_cost') {
-      cmvCents = orders.reduce(
-        (sum, order) => sum + order.items.reduce((itemSum, item) => itemSum + item.quantity * item.unit_cost_cents, 0),
-        0,
-      );
+      const items = await this.prisma.orderItem.findMany({
+        where: {
+          order: {
+            tenantId: req.tenantId,
+            status: 'closed',
+            settled_at: { gte: start, lte: end },
+          },
+        },
+        select: { quantity: true, unit_cost_cents: true },
+      });
+      cmvCents = items.reduce((sum, item) => sum + item.quantity * item.unit_cost_cents, 0);
     } else {
       const aggregate = await this.prisma.purchase.aggregate({
         where: { tenantId: req.tenantId, status: 'confirmed', purchased_at: { gte: start, lte: end } },
@@ -124,20 +150,29 @@ export class ReportsController {
     let expensesCents = 0;
     const expenseCategories: Record<string, { category_id: string; category: string; amount_cents: number }> = {};
     if (expenseAxis === 'competence') {
-      const expenses = await this.prisma.payableExpense.findMany({
+      const grouped = await this.prisma.payableExpense.groupBy({
+        by: ['categoryId'],
         where: { tenantId: req.tenantId, canceled_at: null, competence_date: { gte: start, lte: end } },
-        include: { category: true },
+        _sum: { amount_cents: true },
       });
-      for (const expense of expenses) {
-        expensesCents += expense.amount_cents;
-        const row = expenseCategories[expense.categoryId] ?? { category_id: expense.categoryId, category: expense.category.name, amount_cents: 0 };
-        row.amount_cents += expense.amount_cents;
-        expenseCategories[expense.categoryId] = row;
+      const categories = await this.prisma.expenseCategory.findMany({
+        where: { tenantId: req.tenantId, id: { in: grouped.map((g) => g.categoryId) } },
+        select: { id: true, name: true },
+      });
+      const catMap = new Map(categories.map((c) => [c.id, c.name]));
+      for (const row of grouped) {
+        const amount = row._sum.amount_cents ?? 0;
+        expensesCents += amount;
+        expenseCategories[row.categoryId] = {
+          category_id: row.categoryId,
+          category: catMap.get(row.categoryId) ?? '',
+          amount_cents: amount,
+        };
       }
     } else {
       const payments = await this.prisma.expensePayment.findMany({
         where: { paid_at: { gte: start, lte: end }, expense: { tenantId: req.tenantId, canceled_at: null } },
-        include: { expense: { include: { category: true } } },
+        include: { expense: { select: { categoryId: true, category: { select: { name: true } } } } },
       });
       for (const payment of payments) {
         expensesCents += payment.amount_cents;

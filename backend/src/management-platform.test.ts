@@ -23,6 +23,11 @@ async function runManagementPlatformTests() {
   await prisma.tenantSubscription.create({ data: { tenantId, plan: 'pro', status: 'active' } });
 
   const req = { tenantId, user: { sub: userId }, role: 'manager', headers: {} } as any;
+  const supplierReq = { ...req, headers: { 'x-idempotency-key': `supplier_${runId}` } };
+  const purchaseReq = { ...req, headers: { 'x-idempotency-key': `purchase_${runId}` } };
+  const stockReq = { ...req, headers: { 'x-idempotency-key': `stock_${runId}` } };
+  const expenseReq = { ...req, headers: { 'x-idempotency-key': `expense_${runId}` } };
+  const paymentReq = { ...req, headers: { 'x-idempotency-key': `payment_${runId}` } };
   const suppliers = new SuppliersController(prisma);
   const finance = new FinanceController(prisma);
   const inventory = new InventoryController(prisma);
@@ -37,7 +42,7 @@ async function runManagementPlatformTests() {
     { emitToTenant: () => {} } as Partial<OrdersGateway> as OrdersGateway,
   );
 
-  const supplier = await suppliers.create(req, { name: 'Distribuidora Teste' });
+  const supplier = await suppliers.create(supplierReq, { name: 'Distribuidora Teste' });
   const category = await finance.createCategory(req, { name: 'Fornecedores' });
   const product = await prisma.product.create({
     data: {
@@ -50,7 +55,7 @@ async function runManagementPlatformTests() {
     },
   });
 
-  const purchase = await purchases.create(req, {
+  const purchase = await purchases.create(purchaseReq, {
     supplier_id: supplier.id,
     document_no: 'NF-001',
     purchased_at: '2026-09-05T12:00:00.000Z',
@@ -66,7 +71,7 @@ async function runManagementPlatformTests() {
   assert.strictEqual(stocked.cost_cents, 400);
   assert.strictEqual(stocked.stock_quantity.toNumber(), 10);
 
-  await inventory.adjust(req, product.id, { type: 'adjustment_out', quantity: 2, notes: 'Perda' });
+  await inventory.adjust(stockReq, product.id, { type: 'adjustment_out', quantity: 2, notes: 'Perda' });
   const adjusted = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
   assert.strictEqual(adjusted.stock_quantity.toNumber(), 8);
 
@@ -146,7 +151,7 @@ async function runManagementPlatformTests() {
   const generatedExpense = await prisma.payableExpense.findFirstOrThrow({
     where: { tenantId, recurringTemplateId: recurring.id },
   });
-  const partiallyPaid = await finance.payExpense(req, generatedExpense.id, {
+  const partiallyPaid = await finance.payExpense(paymentReq, generatedExpense.id, {
     amount_cents: 100000,
     paid_at: '2026-09-10T12:00:00.000Z',
     payment_method: 'pix',

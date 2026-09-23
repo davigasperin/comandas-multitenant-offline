@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import '../../../core/network/pagination.dart';
 
 class ManagementRepository {
   final Dio _dio;
@@ -15,19 +16,11 @@ class ManagementRepository {
     return Map<String, dynamic>.from(response.data as Map);
   }
 
-  Future<List<Map<String, dynamic>>> getExpenses() async {
-    final response = await _dio.get('/finance/expenses');
-    return (response.data['data'] as List)
-        .map((item) => Map<String, dynamic>.from(item as Map))
-        .toList();
-  }
+  Future<List<Map<String, dynamic>>> getExpenses() =>
+      getAllPages(_dio, '/finance/expenses');
 
-  Future<List<Map<String, dynamic>>> getStock() async {
-    final response = await _dio.get('/inventory/stock');
-    return (response.data['data'] as List)
-        .map((item) => Map<String, dynamic>.from(item as Map))
-        .toList();
-  }
+  Future<List<Map<String, dynamic>>> getStock() =>
+      getAllPages(_dio, '/inventory/stock');
 
   Future<List<Map<String, dynamic>>> getEmployees() async {
     final response = await _dio.get('/employees');
