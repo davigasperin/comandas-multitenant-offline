@@ -43,3 +43,7 @@ export function getCorsOptions(value: string | undefined) {
     credentials: false,
   };
 }
+
+export function shouldEnableSwagger(nodeEnv: string | undefined, enabled: string | undefined): boolean {
+  return nodeEnv !== 'production' && enabled === 'true';
+}

@@ -38,7 +38,6 @@ export function verifyPixWebhookSignature(params: {
   rawBody: Buffer;
   signature?: string;
   timestamp?: string;
-  maxAgeSeconds?: number;
 }): void {
   const secret = getPixWebhookSecret(params.provider);
   if (!secret) throw new ForbiddenException('Webhook Pix não autorizado');
@@ -48,8 +47,7 @@ export function verifyPixWebhookSignature(params: {
 
   const timestampNum = Number(params.timestamp);
   const now = Math.floor(Date.now() / 1000);
-  const maxAge = params.maxAgeSeconds ?? 300;
-  if (!Number.isFinite(timestampNum) || Math.abs(now - timestampNum) > maxAge) {
+  if (!Number.isInteger(timestampNum) || Math.abs(now - timestampNum) > 300) {
     throw new ForbiddenException('Webhook Pix não autorizado');
   }
 

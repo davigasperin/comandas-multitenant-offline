@@ -3,7 +3,7 @@ import * as crypto from 'node:crypto';
 import { ValidationPipe, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { hashPassword, verifyPassword, generateRefreshToken, hashToken } from './auth.utils';
-import { validateJwtSecret, getCorsOriginValidator } from './config.utils';
+import { validateJwtSecret, getCorsOriginValidator, shouldEnableSwagger } from './config.utils';
 import { PrismaService } from './prisma.service';
 import { AuthService } from './auth.service';
 import { migratePlaintextPasswords } from './migrate-passwords';
@@ -43,6 +43,8 @@ async function runSecurityTests() {
   );
   const validSecret = crypto.randomBytes(32).toString('hex');
   assert.strictEqual(validateJwtSecret(validSecret), validSecret, 'Valid secret >= 32 bytes must pass');
+  assert.strictEqual(shouldEnableSwagger('production', 'true'), false, 'Swagger must remain disabled in production');
+  assert.strictEqual(shouldEnableSwagger('development', 'true'), true, 'Swagger can be enabled outside production');
 
   // 3. CORS Origin Validation Tests
   console.log('3. Testando validação de origem CORS...');
