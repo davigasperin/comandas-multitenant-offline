@@ -82,13 +82,10 @@ export class EmployeesController {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      if (body.name || body.password) {
+      if (body.name) {
         await tx.user.update({
           where: { id: userId },
-          data: {
-            ...(body.name ? { name: body.name.trim() } : {}),
-            ...(body.password ? { password: await hashPassword(body.password) } : {}),
-          },
+          data: { name: body.name.trim() },
         });
       }
       if (body.role || body.active !== undefined) {

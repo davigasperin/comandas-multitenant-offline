@@ -115,7 +115,6 @@ export class UpdateEmployeeDto {
   @IsOptional() @IsString() @IsNotEmpty() name?: string;
   @IsOptional() @IsIn(['waiter', 'kitchen', 'cashier', 'manager']) role?: string;
   @IsOptional() @IsBoolean() active?: boolean;
-  @IsOptional() @IsString() @IsNotEmpty() password?: string;
 }
 
 export class UpdatePrinterSettingDto {
