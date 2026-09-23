@@ -1,6 +1,7 @@
+import { APP_GUARD } from '@nestjs/core';
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { OrdersController } from './orders.controller';
 import { OrdersGateway } from './orders.gateway';
@@ -40,6 +41,15 @@ import { PixService } from './pix.service';
     PixController,
     PixWebhookController,
   ],
-  providers: [AuthService, OrdersGateway, FeatureGuard, PixService],
+  providers: [
+    AuthService,
+    OrdersGateway,
+    FeatureGuard,
+    PixService,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}
