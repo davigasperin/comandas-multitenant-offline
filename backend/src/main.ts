@@ -5,12 +5,19 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { getCorsOptions, shouldEnableSwagger } from './config.utils';
+import { RedisIoAdapter } from './redis-io.adapter';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     cors: getCorsOptions(process.env.CORS_ORIGINS),
     rawBody: true,
   });
+
+  if (process.env.REDIS_URL?.trim()) {
+    const redisAdapter = new RedisIoAdapter(app);
+    await redisAdapter.connectToRedis(process.env.REDIS_URL.trim());
+    app.useWebSocketAdapter(redisAdapter);
+  }
   app.use((req: any, res: any, next: () => void) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
@@ -36,6 +43,7 @@ async function bootstrap() {
     SwaggerModule.setup('docs', app, document);
   }
 
+  app.enableShutdownHooks();
   await app.listen(Number(process.env.PORT ?? 3000));
 }
 bootstrap();

@@ -31,6 +31,8 @@ import {
 } from './dto/management.dto';
 import { RequireFeature } from './feature.decorator';
 import { FeatureGuard } from './feature.guard';
+import { executeIdempotent, getIdempotencyKey } from './idempotency.utils';
+import { pageArgs, pageResult } from './pagination';
 import { PrismaService } from './prisma.service';
 import { Roles } from './roles.decorator';
 import { RolesGuard } from './roles.guard';
@@ -39,6 +41,7 @@ import { TenantGuard } from './tenant.guard';
 interface RequestContext {
   tenantId: string;
   user?: { sub: string };
+  headers?: Record<string, string | string[] | undefined>;
 }
 
 function parseDate(value: string, field: string): Date {
@@ -77,21 +80,33 @@ export class SuppliersController {
   constructor(private readonly prisma: PrismaService) {}
 
   @Get()
-  async list(@Request() req: RequestContext, @Query('active') active?: string) {
-    return {
-      data: await this.prisma.supplier.findMany({
-        where: { tenantId: req.tenantId, ...(active === undefined ? {} : { active: active === 'true' }) },
-        orderBy: { name: 'asc' },
-      }),
-    };
+  async list(@Request() req: RequestContext, @Query('active') active?: string, @Query('limit') limit?: string, @Query('cursor') cursor?: string) {
+    const rows = await this.prisma.supplier.findMany({
+      where: { tenantId: req.tenantId, ...(active === undefined ? {} : { active: active === 'true' }) },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      ...pageArgs(limit, cursor),
+    });
+    return pageResult(rows, limit);
   }
 
   @Roles('manager')
   @Post()
-  create(@Request() req: RequestContext, @Body() body: CreateSupplierDto) {
-    return this.prisma.supplier.create({
-      data: { tenantId: req.tenantId, ...body, name: body.name.trim() },
-    });
+  async create(@Request() req: RequestContext, @Body() body: CreateSupplierDto) {
+    const key = getIdempotencyKey(req.headers ?? {});
+    const result = await executeIdempotent(
+      this.prisma,
+      req.tenantId,
+      key,
+      'POST /v1/suppliers',
+      body,
+      req.user?.sub,
+      async (tx) => {
+        return tx.supplier.create({
+          data: { tenantId: req.tenantId, ...body, name: body.name.trim() },
+        });
+      },
+    );
+    return result.value;
   }
 
   @Roles('manager')
@@ -137,6 +152,8 @@ export class FinanceController {
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('status') status?: string,
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string,
   ) {
     const expenses = await this.prisma.payableExpense.findMany({
       where: {
@@ -144,31 +161,44 @@ export class FinanceController {
         ...(from || to ? { due_date: { ...(from ? { gte: parseDate(from, 'from') } : {}), ...(to ? { lte: parseDate(to, 'to') } : {}) } } : {}),
       },
       include: { supplier: true, category: true, payments: { orderBy: { paid_at: 'asc' } } },
-      orderBy: [{ due_date: 'asc' }, { createdAt: 'desc' }],
+      orderBy: [{ due_date: 'asc' }, { createdAt: 'desc' }, { id: 'desc' }],
+      ...pageArgs(limit, cursor),
     });
-    const data = expenses.map(withExpenseStatus);
-    return { data: status ? data.filter((expense) => expense.status === status) : data };
+    const data = status ? expenses.map(withExpenseStatus).filter((expense) => expense.status === status) : expenses.map(withExpenseStatus);
+    return pageResult(data, limit);
   }
 
   @Roles('cashier', 'manager')
   @Post('expenses')
   async createExpense(@Request() req: RequestContext, @Body() body: CreateExpenseDto) {
     await this.assertFinanceReferences(req.tenantId, body.category_id, body.supplier_id);
-    const expense = await this.prisma.payableExpense.create({
-      data: {
-        tenantId: req.tenantId,
-        supplierId: body.supplier_id,
-        categoryId: body.category_id,
-        description: body.description.trim(),
-        amount_cents: body.amount_cents,
-        due_date: parseDate(body.due_date, 'due_date'),
-        competence_date: monthStart(parseDate(body.competence_date, 'competence_date')),
-        notes: body.notes,
-        created_by: req.user?.sub,
+    const key = getIdempotencyKey(req.headers ?? {});
+    const result = await executeIdempotent(
+      this.prisma,
+      req.tenantId,
+      key,
+      'POST /v1/finance/expenses',
+      body,
+      req.user?.sub,
+      async (tx) => {
+        const expense = await tx.payableExpense.create({
+          data: {
+            tenantId: req.tenantId,
+            supplierId: body.supplier_id,
+            categoryId: body.category_id,
+            description: body.description.trim(),
+            amount_cents: body.amount_cents,
+            due_date: parseDate(body.due_date, 'due_date'),
+            competence_date: monthStart(parseDate(body.competence_date, 'competence_date')),
+            notes: body.notes,
+            created_by: req.user?.sub,
+          },
+          include: { supplier: true, category: true, payments: true },
+        });
+        return withExpenseStatus(expense);
       },
-      include: { supplier: true, category: true, payments: true },
-    });
-    return withExpenseStatus(expense);
+    );
+    return result.value;
   }
 
   @Roles('cashier', 'manager')
@@ -202,24 +232,34 @@ export class FinanceController {
   @Roles('cashier', 'manager')
   @Post('expenses/:id/payments')
   async payExpense(@Request() req: RequestContext, @Param('id') id: string, @Body() body: CreateExpensePaymentDto) {
-    return this.prisma.$transaction(async (tx) => {
-      const expense = await tx.payableExpense.findFirst({ where: { id, tenantId: req.tenantId, canceled_at: null }, include: { payments: true } });
-      if (!expense) throw new NotFoundException('Despesa não encontrada');
-      const paid = expense.payments.reduce((sum, payment) => sum + payment.amount_cents, 0);
-      if (paid + body.amount_cents > expense.amount_cents) throw new BadRequestException('Pagamento excede o saldo da despesa');
-      await tx.expensePayment.create({
-        data: {
-          expenseId: id,
-          amount_cents: body.amount_cents,
-          paid_at: parseDate(body.paid_at, 'paid_at'),
-          payment_method: body.payment_method,
-          notes: body.notes,
-          created_by: req.user?.sub,
-        },
-      });
-      const updated = await tx.payableExpense.findUniqueOrThrow({ where: { id }, include: { supplier: true, category: true, payments: true } });
-      return withExpenseStatus(updated);
-    });
+    const key = getIdempotencyKey(req.headers ?? {});
+    const result = await executeIdempotent(
+      this.prisma,
+      req.tenantId,
+      key,
+      `POST /v1/finance/expenses/${id}/payments`,
+      body,
+      req.user?.sub,
+      async (tx) => {
+        const expense = await tx.payableExpense.findFirst({ where: { id, tenantId: req.tenantId, canceled_at: null }, include: { payments: true } });
+        if (!expense) throw new NotFoundException('Despesa não encontrada');
+        const paid = expense.payments.reduce((sum, payment) => sum + payment.amount_cents, 0);
+        if (paid + body.amount_cents > expense.amount_cents) throw new BadRequestException('Pagamento excede o saldo da despesa');
+        await tx.expensePayment.create({
+          data: {
+            expenseId: id,
+            amount_cents: body.amount_cents,
+            paid_at: parseDate(body.paid_at, 'paid_at'),
+            payment_method: body.payment_method,
+            notes: body.notes,
+            created_by: req.user?.sub,
+          },
+        });
+        const updated = await tx.payableExpense.findUniqueOrThrow({ where: { id }, include: { supplier: true, category: true, payments: true } });
+        return withExpenseStatus(updated);
+      },
+    );
+    return result.value;
   }
 
   @Roles('manager')
@@ -305,14 +345,14 @@ export class InventoryController {
   constructor(private readonly prisma: PrismaService) {}
 
   @Get('stock')
-  async stock(@Request() req: RequestContext) {
-    return {
-      data: await this.prisma.product.findMany({
-        where: { tenantId: req.tenantId, stock_controlled: true },
-        select: { id: true, name: true, sku: true, unit: true, cost_cents: true, stock_quantity: true, minimum_stock: true, active: true },
-        orderBy: { name: 'asc' },
-      }),
-    };
+  async stock(@Request() req: RequestContext, @Query('limit') limit?: string, @Query('cursor') cursor?: string) {
+    const rows = await this.prisma.product.findMany({
+      where: { tenantId: req.tenantId, stock_controlled: true },
+      select: { id: true, name: true, sku: true, unit: true, cost_cents: true, stock_quantity: true, minimum_stock: true, active: true },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      ...pageArgs(limit, cursor),
+    });
+    return pageResult(rows, limit);
   }
 
   @Get('movements')
@@ -333,29 +373,39 @@ export class InventoryController {
     if (body.quantity === 0) throw new BadRequestException('Quantidade do ajuste não pode ser zero');
     const absolute = new Prisma.Decimal(Math.abs(body.quantity));
     const signed = body.type === 'adjustment_out' ? absolute.negated() : absolute;
-    return this.prisma.$transaction(async (tx) => {
-      const product = await tx.product.findFirst({ where: { id, tenantId: req.tenantId, stock_controlled: true } });
-      if (!product) throw new NotFoundException('Produto com controle de estoque não encontrado');
-      const updated = await tx.product.update({
-        where: { id },
-        data: {
-          stock_quantity: { increment: signed },
-          ...(body.unit_cost_cents !== undefined ? { cost_cents: body.unit_cost_cents } : {}),
-        },
-      });
-      const movement = await tx.stockMovement.create({
-        data: {
-          tenantId: req.tenantId,
-          productId: id,
-          type: body.type,
-          quantity: signed,
-          unit_cost_cents: body.unit_cost_cents,
-          notes: body.notes,
-          created_by: req.user?.sub,
-        },
-      });
-      return { product: updated, movement };
-    });
+    const key = getIdempotencyKey(req.headers ?? {});
+    const result = await executeIdempotent(
+      this.prisma,
+      req.tenantId,
+      key,
+      `POST /v1/inventory/products/${id}/adjust`,
+      body,
+      req.user?.sub,
+      async (tx) => {
+        const product = await tx.product.findFirst({ where: { id, tenantId: req.tenantId, stock_controlled: true } });
+        if (!product) throw new NotFoundException('Produto com controle de estoque não encontrado');
+        const updated = await tx.product.update({
+          where: { id },
+          data: {
+            stock_quantity: { increment: signed },
+            ...(body.unit_cost_cents !== undefined ? { cost_cents: body.unit_cost_cents } : {}),
+          },
+        });
+        const movement = await tx.stockMovement.create({
+          data: {
+            tenantId: req.tenantId,
+            productId: id,
+            type: body.type,
+            quantity: signed,
+            unit_cost_cents: body.unit_cost_cents,
+            notes: body.notes,
+            created_by: req.user?.sub,
+          },
+        });
+        return { product: updated, movement };
+      },
+    );
+    return result.value;
   }
 }
 
@@ -365,14 +415,14 @@ export class PurchasesController {
   constructor(private readonly prisma: PrismaService) {}
 
   @Get()
-  async list(@Request() req: RequestContext) {
-    return {
-      data: await this.prisma.purchase.findMany({
-        where: { tenantId: req.tenantId },
-        include: { supplier: true, items: { include: { product: true } }, payableExpense: true },
-        orderBy: { purchased_at: 'desc' },
-      }),
-    };
+  async list(@Request() req: RequestContext, @Query('limit') limit?: string, @Query('cursor') cursor?: string) {
+    const rows = await this.prisma.purchase.findMany({
+      where: { tenantId: req.tenantId },
+      include: { supplier: true, items: { include: { product: true } }, payableExpense: true },
+      orderBy: [{ purchased_at: 'desc' }, { id: 'desc' }],
+      ...pageArgs(limit, cursor),
+    });
+    return pageResult(rows, limit);
   }
 
   @Roles('manager')
@@ -420,74 +470,84 @@ export class PurchasesController {
     }));
     const totalCents = lines.reduce((sum, item) => sum + item.total_cents, 0);
 
-    return this.prisma.$transaction(async (tx) => {
-      const purchase = await tx.purchase.create({
-        data: {
-          tenantId: req.tenantId,
-          supplierId: body.supplier_id,
-          document_no: body.document_no,
-          status: 'confirmed',
-          purchased_at: parseDate(body.purchased_at, 'purchased_at'),
-          total_cents: totalCents,
-          notes: body.notes,
-          created_by: req.user?.sub,
-          confirmed_at: new Date(),
-          items: {
-            create: lines.map((item) => ({
-              productId: item.product_id,
-              quantity: new Prisma.Decimal(item.quantity),
-              unit_cost_cents: item.unit_cost_cents,
-              total_cents: item.total_cents,
-            })),
-          },
-        },
-      });
-
-      for (const line of lines) {
-        const product = products.find((candidate) => candidate.id === line.product_id)!;
-        await tx.product.update({
-          where: { id: line.product_id },
-          data: {
-            cost_cents: line.unit_cost_cents,
-            ...(product.stock_controlled ? { stock_quantity: { increment: new Prisma.Decimal(line.quantity) } } : {}),
-          },
-        });
-        if (product.stock_controlled) {
-          await tx.stockMovement.create({
-            data: {
-              tenantId: req.tenantId,
-              productId: line.product_id,
-              type: 'purchase',
-              quantity: new Prisma.Decimal(line.quantity),
-              unit_cost_cents: line.unit_cost_cents,
-              reference_type: 'purchase',
-              reference_id: purchase.id,
-              created_by: req.user?.sub,
-            },
-          });
-        }
-      }
-
-      if (body.create_payable) {
-        const expense = await tx.payableExpense.create({
+    const key = getIdempotencyKey(req.headers ?? {});
+    const result = await executeIdempotent(
+      this.prisma,
+      req.tenantId,
+      key,
+      'POST /v1/purchases',
+      body,
+      req.user?.sub,
+      async (tx) => {
+        const purchase = await tx.purchase.create({
           data: {
             tenantId: req.tenantId,
             supplierId: body.supplier_id,
-            categoryId: body.expense_category_id!,
-            description: `Compra ${body.document_no ?? purchase.id}`,
-            amount_cents: totalCents,
-            due_date: parseDate(body.due_date!, 'due_date'),
-            competence_date: monthStart(parseDate(body.purchased_at, 'purchased_at')),
+            document_no: body.document_no,
+            status: 'confirmed',
+            purchased_at: parseDate(body.purchased_at, 'purchased_at'),
+            total_cents: totalCents,
+            notes: body.notes,
             created_by: req.user?.sub,
+            confirmed_at: new Date(),
+            items: {
+              create: lines.map((item) => ({
+                productId: item.product_id,
+                quantity: new Prisma.Decimal(item.quantity),
+                unit_cost_cents: item.unit_cost_cents,
+                total_cents: item.total_cents,
+              })),
+            },
           },
         });
-        await tx.purchase.update({ where: { id: purchase.id }, data: { payableExpenseId: expense.id } });
-      }
 
-      return tx.purchase.findUniqueOrThrow({
-        where: { id: purchase.id },
-        include: { supplier: true, items: { include: { product: true } }, payableExpense: true },
-      });
-    });
+        for (const line of lines) {
+          const product = products.find((candidate) => candidate.id === line.product_id)!;
+          await tx.product.update({
+            where: { id: line.product_id },
+            data: {
+              cost_cents: line.unit_cost_cents,
+              ...(product.stock_controlled ? { stock_quantity: { increment: new Prisma.Decimal(line.quantity) } } : {}),
+            },
+          });
+          if (product.stock_controlled) {
+            await tx.stockMovement.create({
+              data: {
+                tenantId: req.tenantId,
+                productId: line.product_id,
+                type: 'purchase',
+                quantity: new Prisma.Decimal(line.quantity),
+                unit_cost_cents: line.unit_cost_cents,
+                reference_type: 'purchase',
+                reference_id: purchase.id,
+                created_by: req.user?.sub,
+              },
+            });
+          }
+        }
+
+        if (body.create_payable) {
+          const expense = await tx.payableExpense.create({
+            data: {
+              tenantId: req.tenantId,
+              supplierId: body.supplier_id,
+              categoryId: body.expense_category_id!,
+              description: `Compra ${body.document_no ?? purchase.id}`,
+              amount_cents: totalCents,
+              due_date: parseDate(body.due_date!, 'due_date'),
+              competence_date: monthStart(parseDate(body.purchased_at, 'purchased_at')),
+              created_by: req.user?.sub,
+            },
+          });
+          await tx.purchase.update({ where: { id: purchase.id }, data: { payableExpenseId: expense.id } });
+        }
+
+        return tx.purchase.findUniqueOrThrow({
+          where: { id: purchase.id },
+          include: { supplier: true, items: { include: { product: true } }, payableExpense: true },
+        });
+      },
+    );
+    return result.value;
   }
 }

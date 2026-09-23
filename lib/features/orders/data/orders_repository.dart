@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../../../core/errors/api_exception.dart';
+import '../../../core/network/pagination.dart';
 import '../domain/order_model.dart';
 import '../domain/product_model.dart';
 
@@ -91,11 +92,8 @@ class OrdersRepository {
 
   Future<List<Product>> getProducts() async {
     try {
-      final response = await _dio.get('/orders/products');
-      final data = response.data['data'] as List<dynamic>;
-      return data
-          .map((j) => Product.fromJson(j as Map<String, dynamic>))
-          .toList();
+      final data = await getAllPages(_dio, '/orders/products');
+      return data.map(Product.fromJson).toList();
     } on DioException catch (e) {
       _rethrowAsApiException(e);
     }

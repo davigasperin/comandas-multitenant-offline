@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import '../../../core/network/pagination.dart';
 import '../domain/catalog_models.dart';
 
 class CatalogRepository {
@@ -13,10 +14,8 @@ class CatalogRepository {
   }
 
   Future<List<CatalogProduct>> products() async {
-    final response = await dio.get('/products', queryParameters: {'all': true});
-    return (response.data['data'] as List)
-        .map((e) => CatalogProduct.fromJson(Map<String, dynamic>.from(e)))
-        .toList();
+    final data = await getAllPages(dio, '/products', queryParameters: {'all': true});
+    return data.map(CatalogProduct.fromJson).toList();
   }
 
   Future<List<DiningTableModel>> tables() async {

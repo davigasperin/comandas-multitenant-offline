@@ -22,6 +22,7 @@ import { PrismaService } from './prisma.service';
 import { TenantGuard } from './tenant.guard';
 import { Roles } from './roles.decorator';
 import { RolesGuard } from './roles.guard';
+import { pageArgs, pageResult } from './pagination';
 
 interface RequestContext {
   tenantId: string;
@@ -138,12 +139,13 @@ export class OrdersController {
   }
 
   @Get('products')
-  async getProducts(@Request() req: RequestContext) {
+  async getProducts(@Request() req: RequestContext, @Query('limit') limit?: string, @Query('cursor') cursor?: string) {
     const products = await this.prisma.product.findMany({
       where: { tenantId: req.tenantId },
       orderBy: { createdAt: 'desc' },
+      ...pageArgs(limit, cursor),
     });
-    return { data: products };
+    return pageResult(products, limit);
   }
 
   @Get()

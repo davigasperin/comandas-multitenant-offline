@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Request, ServiceUnavailableException, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AuthGuard } from './auth.guard';
 import { AuthService } from './auth.service';
@@ -15,6 +15,16 @@ export class AppController {
     private readonly authService: AuthService,
     private readonly prisma: PrismaService,
   ) {}
+
+  @Get('health')
+  async health() {
+    try {
+      await this.prisma.$queryRaw`SELECT 1`;
+      return { ok: true };
+    } catch {
+      throw new ServiceUnavailableException('Banco de dados indisponível');
+    }
+  }
 
   @Throttle({ default: { limit: 5, ttl: 60_000, blockDuration: 60_000 } })
   @Post('auth/login')

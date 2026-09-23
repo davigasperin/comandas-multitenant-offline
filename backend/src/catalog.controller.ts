@@ -29,6 +29,7 @@ import { PrismaService } from './prisma.service';
 import { TenantGuard } from './tenant.guard';
 import { Roles } from './roles.decorator';
 import { RolesGuard } from './roles.guard';
+import { pageArgs, pageResult } from './pagination';
 
 interface RequestContext {
   tenantId: string;
@@ -115,6 +116,8 @@ export class CatalogController {
     @Request() req: RequestContext,
     @Query('all') all?: string,
     @Query('categoryId') categoryId?: string,
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string,
   ) {
     const showAll = all === 'true' || all === '1';
     const products = await this.prisma.product.findMany({
@@ -124,9 +127,10 @@ export class CatalogController {
         ...(categoryId ? { categoryId } : {}),
       },
       include: { category: true },
-      orderBy: [{ sort_order: 'asc' }, { name: 'asc' }],
+      orderBy: [{ sort_order: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+      ...pageArgs(limit, cursor),
     });
-    return { data: products };
+    return pageResult(products, limit);
   }
 
   @Roles('manager')

@@ -22,6 +22,8 @@ backend/.env.*
 backend/*.log
 backend/prisma/*.db
 backend/prisma/*.db-journal
+backend/prisma/**/*.db
+backend/prisma/**/*.db-journal
 backend/*.db
 backend/*.db-journal
 # Widget Preview related
