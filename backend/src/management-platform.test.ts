@@ -1,4 +1,5 @@
 import * as assert from 'node:assert';
+import { createHmac } from 'node:crypto';
 import { FinanceController, InventoryController, PurchasesController, SuppliersController } from './management.controller';
 import { ReportsController } from './reports.controller';
 import { PrismaService } from './prisma.service';
@@ -106,17 +107,23 @@ async function runManagementPlatformTests() {
       copy_paste: 'test-payload',
     },
   });
-  process.env.PIX_WEBHOOK_SECRET = `secret_${runId}`;
-  const pixResult = await pixWebhook.receive(
-    'test-provider',
-    process.env.PIX_WEBHOOK_SECRET,
-    { txid: pixCharge.txid, status: 'paid', amount_cents: 1800 },
-  );
+  process.env.PIX_WEBHOOK_SECRET_TEST_PROVIDER = `secret_${runId}`;
+  const webhookBody = { txid: pixCharge.txid, status: 'paid', amount_cents: 1800 };
+  const rawBody = Buffer.from(JSON.stringify(webhookBody));
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const signature = createHmac('sha256', process.env.PIX_WEBHOOK_SECRET_TEST_PROVIDER)
+    .update(`${timestamp}.`)
+    .update(rawBody)
+    .digest('hex');
+  const request = { rawBody } as any;
+  const pixResult = await pixWebhook.receive('test-provider', request, signature, timestamp, webhookBody);
   assert.strictEqual(pixResult.ok, true);
   const pixReplay = await pixWebhook.receive(
     'test-provider',
-    process.env.PIX_WEBHOOK_SECRET,
-    { txid: pixCharge.txid, status: 'paid', amount_cents: 1800 },
+    request,
+    signature,
+    timestamp,
+    webhookBody,
   );
   assert.strictEqual(pixReplay.replayed, true);
   const afterPixStock = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });

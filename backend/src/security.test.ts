@@ -9,6 +9,7 @@ import { AuthService } from './auth.service';
 import { migratePlaintextPasswords } from './migrate-passwords';
 import { LoginDto, RefreshTokenDto } from './dto/auth.dto';
 import { CreateOrderDto, AddItemDto, UpdateOrderStatusDto } from './dto/orders.dto';
+import { verifyPixWebhookSignature } from './pix.controller';
 
 async function runSecurityTests() {
   console.log('Iniciando suíte abrangente de segurança P0 e integração...');
@@ -49,6 +50,23 @@ async function runSecurityTests() {
   assert.strictEqual(corsChecker(undefined), true, 'Non-browser / mobile requests must be allowed');
   assert.strictEqual(corsChecker('http://localhost:3000'), true, 'Allowed origin must return true');
   assert.strictEqual(corsChecker('http://malicious-site.com'), false, 'Unauthorized origin must return false');
+
+  const provider = 'test-provider';
+  const webhookSecret = crypto.randomBytes(32).toString('hex');
+  process.env.PIX_WEBHOOK_SECRET_TEST_PROVIDER = webhookSecret;
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const rawBody = Buffer.from('{"txid":"tx1","status":"paid"}');
+  const signature = crypto.createHmac('sha256', webhookSecret).update(`${timestamp}.`).update(rawBody).digest('hex');
+  assert.doesNotThrow(() => verifyPixWebhookSignature({ provider, rawBody, timestamp, signature }));
+  assert.throws(
+    () => verifyPixWebhookSignature({ provider, rawBody: Buffer.from('{}'), timestamp, signature }),
+    /não autorizado/,
+  );
+  assert.throws(
+    () => verifyPixWebhookSignature({ provider, rawBody, timestamp: String(Number(timestamp) - 301), signature }),
+    /não autorizado/,
+  );
+  delete process.env.PIX_WEBHOOK_SECRET_TEST_PROVIDER;
 
   // 4. DTO ValidationPipe Tests
   console.log('4. Testando pipe de validação dos DTOs em tempo de execução...');

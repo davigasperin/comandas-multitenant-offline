@@ -1,12 +1,16 @@
 import 'dotenv/config';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { getCorsOptions } from './config.utils';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { cors: getCorsOptions(process.env.CORS_ORIGINS) });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    cors: getCorsOptions(process.env.CORS_ORIGINS),
+    rawBody: true,
+  });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
 
   if (process.env.ENABLE_SWAGGER === 'true') {
